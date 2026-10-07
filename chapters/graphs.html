@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>이중 그래프 · ATREX-BOOK</title>
+<meta name="description" content="탐색 그래프와 자산 그래프, 둘을 잇는 앵커. 노드 종류와 상태 집합, 간선 관계, 커버리지 정의를 스키마 수준에서 해설한다.">
+<link rel="canonical" href="https://busy6ee.github.io/ATREX-BOOK/chapters/graphs.html">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<meta name="theme-color" content="#2f5bd6">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="ATREX-BOOK">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:title" content="이중 그래프 · ATREX-BOOK">
+<meta property="og:description" content="탐색 그래프와 자산 그래프, 둘을 잇는 앵커. 노드 종류와 상태 집합, 간선 관계, 커버리지 정의를 스키마 수준에서 해설한다.">
+<meta property="og:url" content="https://busy6ee.github.io/ATREX-BOOK/chapters/graphs.html">
+<meta property="og:image" content="https://busy6ee.github.io/ATREX-BOOK/og.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/common.js"></script>
+<style>
+  .cov-table td, .cov-table th { padding: 7px 12px; font-size: 14px; }
+  .cov-bar { height: 12px; border-radius: 6px; background: var(--surface-2); overflow: hidden; }
+  .cov-bar > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .25s; }
+  #g-detail { font-size: 14px; color: var(--text-dim); line-height: 1.65; }
+  #g-detail b { color: var(--text); }
+</style>
+</head>
+<body data-chapter="graphs">
+<main class="chapter">
+  <header class="chapter-hero">
+    <div class="eyebrow">Chapter 02</div>
+    <h1>이중 그래프</h1>
+    <p class="lead">ARTEX 는 "대상이 무엇인가"와 "어디까지 확인했는가"를 서로 다른 두 그래프에 나눠 담고, 둘을 앵커 테이블로 묶습니다. 이 분리 덕분에 병렬로 일하는 에이전트가 서로의 기록을 덮어쓰지 않고, 매번 새로 깨어나는 계획 에이전트가 PostgreSQL 만 읽고도 현황을 복원할 수 있습니다.</p>
+    <ul class="objectives">
+      <li>탐색 그래프의 노드 7종, 상태 집합, 간선 5종을 스키마 제약과 함께 설명한다</li>
+      <li>자산 그래프가 작업을 가로질러 공유되는 이유를 말하고, 프로그램이 계산하는 것과 에이전트가 제출하는 것을 구분한다</li>
+      <li>앵커가 만드는 양방향 조회와 커버리지 정의를 식으로 쓰고 계산한다</li>
+    </ul>
+  </header>
+
+  <section id="why">
+    <h2>왜 그래프가 둘인가</h2>
+    <p>하나의 그래프에 모두 담으면 수명과 소유권이 서로 다른 데이터가 뒤섞입니다. 도메인, IP, 서비스 같은 자산은 작업이 끝나도 남고 여러 작업이 함께 참조하지만, "어떤 방향을 시도했고 무엇이 나왔는가"는 한 작업의 사고 기록입니다.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>구분</th><th>자산 그래프</th><th>탐색 그래프</th></tr></thead>
+      <tbody>
+        <tr><td>질문</td><td>대상에 무엇이 있는가</td><td>무엇을 시도했고 무엇이 나왔는가</td></tr>
+        <tr><td>범위</td><td>작업을 가로질러 전역 공유</td><td>작업마다 독립 (<code>tasks.exploration_id</code> 가 UNIQUE)</td></tr>
+        <tr><td>수명</td><td>작업이 끝나도 유지</td><td>작업과 함께 보관·아카이브</td></tr>
+        <tr><td>키 계산</td><td>부모·자식 관계와 중복 제거 키는 프로그램이 계산</td><td>노드 종류와 상태 전이는 스키마 제약과 서버 코드가 강제</td></tr>
+        <tr><td>에이전트의 역할</td><td>원본 정보를 제출한다</td><td>사실, 방향, 결과를 기록한다</td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout">
+      <strong>설계 원칙: 에이전트는 사실만 내고 키는 프로그램이 만든다</strong>
+      <p>자산 사이의 부모·자식 관계와 중복 제거 키를 모델에게 맡기면 같은 호스트가 표기 차이로 여러 노드가 되거나 관계가 어긋납니다. ARTEX 는 에이전트가 원본 속성만 제출하게 하고, 정규화와 연결은 코드가 합니다. LLM 이 만든 값을 그대로 키로 쓰지 않는다는 점은 에이전트 시스템 전반에 적용되는 방어적 설계입니다.</p>
+    </div>
+  </section>
+
+  <section id="exploration">
+    <h2>탐색 그래프: 노드, 상태, 간선</h2>
+    <p>노드 종류는 <code>exploration_nodes.kind</code> 의 CHECK 제약으로 닫혀 있고, 종류마다 허용되는 상태 집합도 제약으로 고정됩니다. 잘못된 상태를 쓰려는 코드는 DB 가 거부합니다.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>종류</th><th>의미</th><th>허용 상태</th></tr></thead>
+      <tbody>
+        <tr><td><code>goal</code></td><td>작업의 최종 목표</td><td>open · met · abandoned</td></tr>
+        <tr><td><code>intent</code></td><td>탐색 방향 하나. 계획 에이전트가 만들고 실행 에이전트가 맡는다</td><td>open · running · paused · done · blocked · exhausted · stopped · deleted</td></tr>
+        <tr><td><code>fact</code></td><td>실행 결과와 결론(음성 결과 포함). 작업 시작 시 뿌리 노드(<code>origin</code>)가 하나 만들어진다</td><td>confirmed · dismissed · origin</td></tr>
+        <tr><td><code>finding</code></td><td>확인된 취약점 기록. fact 와 구분된다</td><td>confirmed · dismissed</td></tr>
+        <tr><td><code>hint</code></td><td>사람이 주입한 힌트</td><td>active · consumed</td></tr>
+        <tr><td><code>digest</code></td><td>오래된 노드를 접어 둔 요약. 구성원은 지워지지 않는다</td><td>active · superseded</td></tr>
+        <tr><td><code>begin</code></td><td>예전 방식의 작업 뿌리. 새 작업은 쓰지 않는다 (DEPRECATED)</td><td>open</td></tr>
+      </tbody>
+    </table></div>
+    <p>간선은 <code>exploration_edges.rel</code> 로 다섯 가지 관계를 표현합니다. 모든 간선의 방향은 <b>부모(상류) → 자식(하류)</b> 로 통일되어 있어, 상류를 따라 올라가면 "이 결과가 어디서 왔는가", 하류를 따라 내려가면 "이 방향이 무엇을 낳았는가"를 알 수 있습니다.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>관계</th><th>방향</th><th>뜻</th></tr></thead>
+      <tbody>
+        <tr><td><code>spawns</code></td><td>상위 → 의도</td><td>목표나 이전 결과가 새 의도를 낳았다</td></tr>
+        <tr><td><code>yields</code></td><td>의도 → fact</td><td>의도를 수행해 결과가 나왔다</td></tr>
+        <tr><td><code>derived_from</code></td><td>fact → 의도</td><td>이 결과를 근거로 다음 의도가 정해졌다</td></tr>
+        <tr><td><code>proves</code></td><td>의도 → finding</td><td>의도의 결과로 취약점이 입증되었다</td></tr>
+        <tr><td><code>covers</code></td><td>digest → 구성원</td><td>요약 노드가 어떤 노드를 접었는지. "누가 X 를 접었는가"의 단일 출처</td></tr>
+      </tbody>
+    </table></div>
+
+    <figure class="diagram wide">
+      <svg viewBox="0 0 860 300" role="img" aria-label="탐색 그래프의 노드와 간선 관계">
+        <defs><marker id="g1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker></defs>
+        <rect x="20" y="30" width="110" height="46" rx="10" class="f-surface"/><text x="75" y="58" text-anchor="middle" class="t">goal</text>
+        <rect x="20" y="110" width="110" height="46" rx="10" class="f-surface"/><text x="75" y="138" text-anchor="middle" class="t">fact (origin)</text>
+        <rect x="200" y="70" width="110" height="46" rx="10" class="f-acc-soft"/><text x="255" y="98" text-anchor="middle" class="t-acc">intent</text>
+        <rect x="380" y="70" width="110" height="46" rx="10" class="f-ok-soft"/><text x="435" y="98" text-anchor="middle" class="t">fact</text>
+        <rect x="560" y="70" width="110" height="46" rx="10" class="f-acc-soft"/><text x="615" y="98" text-anchor="middle" class="t-acc">intent</text>
+        <rect x="740" y="30" width="100" height="46" rx="10" class="f-bad-soft"/><text x="790" y="58" text-anchor="middle" class="t">finding</text>
+        <rect x="740" y="120" width="100" height="46" rx="10" class="f-ok-soft"/><text x="790" y="148" text-anchor="middle" class="t">fact</text>
+        <path d="M130 53 L200 82" class="s-acc" marker-end="url(#g1)"/><text x="148" y="60" class="t-mono">spawns</text>
+        <path d="M130 133 L200 106" class="s-acc" marker-end="url(#g1)"/>
+        <path d="M310 93 H380" class="s-acc" marker-end="url(#g1)"/><text x="322" y="84" class="t-mono">yields</text>
+        <path d="M490 93 H560" class="s-acc" marker-end="url(#g1)"/><text x="488" y="84" class="t-mono">derived_from</text>
+        <path d="M670 85 L740 58" class="s-acc" marker-end="url(#g1)"/><text x="682" y="64" class="t-mono">proves</text>
+        <path d="M670 103 L740 138" class="s-acc" marker-end="url(#g1)"/><text x="686" y="132" class="t-mono">yields</text>
+        <rect x="330" y="200" width="200" height="50" rx="10" class="f-acc2-soft"/><text x="430" y="230" text-anchor="middle" class="t-acc2">digest (접힌 요약)</text>
+        <path d="M430 200 L435 118" class="s-dash"/><text x="440" y="165" class="t-mono">covers</text>
+        <text x="20" y="285" class="t-dim">모든 간선은 부모 → 자식 방향. 모든 의도는 origin 사실까지 거슬러 올라갈 수 있다.</text>
+      </svg>
+      <figcaption><b>그림 2-1.</b> 탐색 그래프의 혈통 체인. 의도는 결과(fact)를 낳고 결과는 다음 의도의 근거가 된다. 요약(digest)은 구성원을 지우지 않고 <code>covers</code> 간선으로 가리킨다.</figcaption>
+    </figure>
+
+    <div class="callout tip">
+      <strong>왜 뿌리 fact 가 필요한가</strong>
+      <p>예전에는 작업 뿌리를 <code>begin</code> 노드로 따로 두었습니다. 지금은 작업을 만들 때 상태가 <code>origin</code> 인 fact 를 하나 심고, 모든 의도가 거기까지 거슬러 올라가게 합니다. "의도는 반드시 어떤 fact 와 연결된다"는 규칙이 첫 번째 의도부터 예외 없이 성립하므로, 혈통을 따라가는 조회 코드에 분기가 필요 없습니다.</p>
+    </div>
+
+    <div class="sim" id="sim-graph">
+      <div class="sim-head"><span class="sim-tag">SIMULATOR</span><h3>이중 그래프 탐색기</h3></div>
+      <div class="sim-body side">
+        <div class="sim-view"><canvas id="cv-graph"></canvas></div>
+        <div class="sim-controls">
+          <div class="ctrl"><span>보기</span><div class="seg" id="g-layer"><button data-value="all" class="on">전체</button><button data-value="expl">탐색 간선</button><button data-value="anchor">앵커</button></div></div>
+          <div id="g-detail">노드를 눌러 보세요. 탐색 노드를 누르면 그 노드의 혈통과 앵커된 자산이, 자산을 누르면 그 자산을 겨냥한 탐색 노드가 강조됩니다.</div>
+        </div>
+      </div>
+      <div class="sim-readout">
+        <div class="stat"><span class="k">선택</span><span class="v" id="g-sel">—</span></div>
+        <div class="stat"><span class="k">종류 · 상태</span><span class="v" id="g-kind">—</span></div>
+        <div class="stat"><span class="k">혈통 노드 수</span><span class="v" id="g-lin">—</span></div>
+        <div class="stat"><span class="k">앵커 연결 수</span><span class="v" id="g-anc">—</span></div>
+      </div>
+      <div class="sim-note">예시 데이터입니다. 대상은 문서용 예약 도메인(<code>example.test</code>)이며 실제 시스템과 무관합니다. 해볼 것: 마지막 finding 을 눌러 어떤 의도와 사실을 거쳐 왔는지, 같은 엔드포인트를 겨냥한 다른 노드는 무엇인지 확인하세요.</div>
+    </div>
+  </section>
+
+  <section id="assets">
+    <h2>자산 그래프: 전역 공유 진실 저장소</h2>
+    <p>자산은 <code>assets.type</code> 이 여섯 종류(<code>root_domain · subdomain · ip · service · app · endpoint</code>)로 제한됩니다. 한 행에 도메인, IP, 포트, 열린 포트 목록, URL, 앱 정보 같은 속성이 함께 들어가며, 소속 회사(<code>company_id</code>)와 어떤 작업들이 이 자산을 다뤘는지(<code>task_ids</code>, 배열)를 기록합니다.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>설계 결정</th><th>이유</th></tr></thead>
+      <tbody>
+        <tr><td>작업에 속하지 않고 전역 공유</td><td>같은 대상을 여러 작업이 다뤄도 자산 행은 하나다. 작업이 끝나도 지식이 남는다</td></tr>
+        <tr><td><code>company_source</code> 가 <code>explicit</code> / <code>scope</code></td><td>사람이 지정한 소속과 범위 규칙에서 파생된 소속을 구분한다. 범위를 다시 계산해도 사람이 한 지정은 지워지지 않는다</td></tr>
+        <tr><td>서비스와 엔드포인트의 부모 관계를 프로그램이 계산</td><td>모델이 부모를 잘못 지정해 그래프가 끊어지는 일을 막는다</td></tr>
+        <tr><td>DNS·HTTP 보강은 에이전트와 무관한 워커 풀이 수행</td><td>도메인 해석과 웹 확인 같은 결정적 작업은 LLM 호출 없이 비동기로 채운다</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="anchors">
+    <h2>앵커: 두 그래프를 묶는 테이블 하나</h2>
+    <p>두 그래프는 <code>exploration_anchors(node_id, asset_id)</code> 로만 연결됩니다. 기본 키가 두 열의 쌍이라 같은 연결은 한 번만 존재하고, 양쪽 모두 <code>ON DELETE CASCADE</code> 라서 노드나 자산이 지워지면 연결도 함께 사라집니다. <code>asset_id</code> 에도 색인이 있어 역방향 조회가 느려지지 않습니다.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>방향</th><th>질문</th><th>쓰임</th></tr></thead>
+      <tbody>
+        <tr><td>노드 → 자산</td><td>이 의도와 결과는 어떤 자산을 겨냥했나</td><td>실행 에이전트가 시작할 때 의도에 걸린 자산의 원본 정보를 가져온다</td></tr>
+        <tr><td>자산 → 노드</td><td>이 자산은 이번 작업에서 어떤 의도로 다뤄졌고 무엇이 나왔나</td><td>자산 화면의 탐색 이력, 커버리지 계산</td></tr>
+      </tbody>
+    </table></div>
+    <p>실행 에이전트가 의도에 걸린 자산을 시작 정보로 받는다는 점이 중요합니다. 모델이 대화 기록에서 대상을 기억해 내는 것이 아니라, 앵커로 DB 에서 다시 읽어 옵니다. 세션이 바뀌어도 대상이 흔들리지 않습니다.</p>
+  </section>
+
+  <section id="coverage">
+    <h2>커버리지: 어디까지 확인했는가를 숫자로</h2>
+    <p>작업은 <code>task_scope</code> 로 테스트 범위를 정합니다. 범위 항목의 <code>kind</code> 는 <code>company · root_domain · subdomain · ip · cidr · icp · keyword</code> 일곱 가지이고, <code>source</code> 는 <code>auto</code>(자산을 등록할 때 보수적으로 자동 추가), <code>agent</code>(에이전트가 도구로 추가), <code>manual</code>(사람) 입니다. 같은 범위는 유일 색인으로 한 번만 저장되어, 자동 추가를 다시 실행해도 결과가 같습니다.</p>
+    <div class="formula">
+      $$\text{coverage} = \frac{|A \cap S|}{|S|}$$
+      <div class="where">여기서 \(S\) 는 활성 범위 항목에 매칭되는 자산 집합(분모), \(A\) 는 <b>fact 노드에 앵커된</b> 자산 집합(분자)이다. 의도나 finding 만 앵커된 자산은 분자에 들지 않는다.</div>
+    </div>
+    <p>분자를 fact 로 한정한 이유는 "그 방향을 시도했다"와 "결과를 얻었다"를 구분하기 위해서입니다. 시도만 하고 결과가 없으면 아직 확인한 것이 아니므로 계획 에이전트는 그 자산을 미테스트 백로그로 계속 봅니다.</p>
+
+    <div class="sim" id="sim-coverage">
+      <div class="sim-head"><span class="sim-tag">SIMULATOR</span><h3>커버리지 계산기</h3></div>
+      <div class="sim-body">
+        <div class="sim-view pad">
+          <div class="table-wrap" style="margin:0"><table class="cov-table" id="cov-table">
+            <thead><tr><th>자산</th><th>유형</th><th class="c">범위 안</th><th class="c">fact 앵커</th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+        </div>
+        <div class="sim-controls">
+          <div class="ctrl"><span>범위 항목 (task_scope)</span></div>
+          <label class="check"><input type="checkbox" class="scope" data-k="root" checked> root_domain <code>example.test</code> <span class="pill">auto</span></label>
+          <label class="check"><input type="checkbox" class="scope" data-k="sub"> subdomain <code>admin.example.test</code> <span class="pill">agent</span></label>
+          <label class="check"><input type="checkbox" class="scope" data-k="ip"> ip <code>203.0.113.7</code> <span class="pill">manual</span></label>
+          <label class="check"><input type="checkbox" class="scope" data-k="cidr"> cidr <code>198.51.100.0/24</code> <span class="pill">manual</span></label>
+          <div class="btn-row"><button class="btn" id="cov-all">모두 확인됨</button><button class="btn" id="cov-none">모두 해제</button></div>
+        </div>
+      </div>
+      <div class="sim-readout">
+        <div class="stat"><span class="k">범위 |S|</span><span class="v" id="c-s">—</span></div>
+        <div class="stat"><span class="k">확인됨 |A ∩ S|</span><span class="v" id="c-a">—</span></div>
+        <div class="stat"><span class="k">커버리지</span><span class="v" id="c-cov">—</span></div>
+        <div class="stat"><span class="k">미테스트 백로그</span><span class="v" id="c-back">—</span></div>
+      </div>
+      <div style="padding:10px 18px;background:var(--bg-elev);border-top:1px solid var(--border)"><div class="cov-bar"><i id="c-bar"></i></div></div>
+      <div class="sim-note">해볼 것: 범위를 하나씩 켜면 분모가 바뀝니다. 범위 밖 자산에 fact 앵커가 있어도 분자에 들지 않습니다. 분모가 0 이면 커버리지는 정의되지 않으므로 계산기도 "—"로 표시합니다.</div>
+    </div>
+  </section>
+
+  <section id="design">
+    <h2>설계에서 배울 점</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>결정</th><th>얻는 것</th><th>치르는 것</th></tr></thead>
+      <tbody>
+        <tr><td>상태 집합을 DB CHECK 로 고정</td><td>코드 버그가 잘못된 상태를 영속화하지 못한다</td><td>상태를 추가하려면 마이그레이션이 필요하다</td></tr>
+        <tr><td>의도를 지우지 않고 <code>deleted</code> 상태로 남김(소프트 삭제)</td><td>혈통과 삭제 사유가 보존되고 대시보드에서는 사라진다</td><td>"활성" 조회마다 상태 조건이 필요하다</td></tr>
+        <tr><td>요약 노드와 <code>covers</code> 간선</td><td>접어도 구성원을 되살릴 수 있다 (무손실)</td><td>그래프 알고리즘이 요약 계층을 걸러 내야 한다 (<a data-ch="planning"></a>장)</td></tr>
+        <tr><td>노드 id 와 취약점 레코드 id 를 분리</td><td>탐색 이력과 취약점 관리(상태, 보고서)가 독립적으로 진화한다</td><td>두 id 를 혼용하면 잘못된 대상을 가리킨다</td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout warn">
+      <strong>id 를 섞지 않는다</strong>
+      <p>취약점은 탐색 그래프의 <code>finding</code> 노드(예전 방식 핸들)와 별도 테이블 <code>findings</code> 의 레코드(독립 id)로 두 번 존재합니다. 후속 도구가 어느 id 를 받는지가 도구마다 다르므로, 보고서나 증거 연결 같은 단계는 반드시 해당 도구가 요구하는 id 종류를 구분해서 넘겨야 합니다. 이런 이중 id 구조는 마이그레이션 과정의 흔적이면서 실수하기 쉬운 지점입니다.</p>
+    </div>
+  </section>
+
+  <section class="keypoints" id="summary">
+    <h2>핵심 정리</h2>
+    <ol>
+      <li>자산 그래프는 전역 공유 진실 저장소, 탐색 그래프는 작업별 사고 기록이다. 수명과 소유가 달라 분리한다.</li>
+      <li>탐색 노드는 7종, 상태 집합은 DB 제약으로 닫혀 있고 간선은 부모에서 자식 방향의 5종이다.</li>
+      <li>에이전트는 사실을 제출하고 키와 관계는 프로그램이 계산한다.</li>
+      <li>앵커 하나로 노드→자산, 자산→노드 양방향 조회가 가능하고, 실행 에이전트는 앵커로 대상을 DB 에서 다시 읽는다.</li>
+      <li>커버리지는 범위에 매칭되는 자산 중 fact 에 앵커된 비율이다. 시도와 결과를 구분한다.</li>
+    </ol>
+  </section>
+
+  <section class="quiz-sec" id="quiz">
+    <h2>확인 퀴즈</h2>
+    <div class="quiz">
+      <div class="quiz-q"><p>탐색 그래프의 간선 방향 규칙으로 옳은 것은?</p><div class="opts">
+        <button class="opt">관계에 따라 방향이 다르다</button>
+        <button class="opt" data-correct>모든 관계에서 부모(상류)에서 자식(하류)</button>
+        <button class="opt">항상 fact 에서 intent 로만 향한다</button>
+        <button class="opt">방향이 없고 양방향 간선이다</button>
+      </div><div class="quiz-exp">요약(digest)의 <code>covers</code> 도 요약에서 구성원 방향입니다. 방향이 통일되어 있어 상류·하류 탐색 코드가 관계마다 갈라지지 않습니다.</div></div>
+      <div class="quiz-q"><p>커버리지 분자에 들어가는 자산은?</p><div class="opts">
+        <button class="opt">의도가 한 번이라도 겨냥한 자산</button>
+        <button class="opt">finding 이 앵커된 자산만</button>
+        <button class="opt" data-correct>활성 범위에 매칭되고 fact 노드에 앵커된 자산</button>
+        <button class="opt">작업의 <code>task_ids</code> 에 포함된 모든 자산</button>
+      </div><div class="quiz-exp">시도(의도)와 결과(fact)를 구분합니다. 범위 밖 자산은 분자에도 분모에도 들지 않습니다.</div></div>
+      <div class="quiz-q"><p>자산 사이의 부모·자식 관계를 에이전트가 아니라 프로그램이 계산하는 이유로 가장 알맞은 것은?</p><div class="opts">
+        <button class="opt">LLM 호출 비용을 줄이려고</button>
+        <button class="opt" data-correct>모델이 만든 값이 표기 차이로 중복 노드를 만들거나 관계를 끊는 일을 막으려고</button>
+        <button class="opt">DB 가 외래 키를 지원하지 않아서</button>
+        <button class="opt">프런트엔드가 그래프를 그리기 위해서</button>
+      </div><div class="quiz-exp">모델 출력을 키로 직접 쓰지 않는 것은 에이전트 시스템의 기본적인 방어 설계입니다.</div></div>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  /* ------------------------------------------------ 시뮬레이터 1: 이중 그래프 탐색기 */
+  const N = [
+    { id: "G",  k: "goal",    s: "open",      t: "goal",        x: 0.10, y: 0.10, d: "작업의 최종 목표. 계획 에이전트가 달성 여부를 판정한다." },
+    { id: "O",  k: "fact",    s: "origin",    t: "origin",      x: 0.33, y: 0.10, d: "작업 시작 때 심는 뿌리 사실. 모든 의도가 여기까지 거슬러 올라간다." },
+    { id: "I1", k: "intent",  s: "done",      t: "의도 1",      x: 0.20, y: 0.30, d: "탐색 방향 하나. 노출 서비스 목록 정리 (예시)." },
+    { id: "F1", k: "fact",    s: "confirmed", t: "fact 1",      x: 0.20, y: 0.50, d: "의도 1 의 결과. 호스트 두 개 확인 (예시)." },
+    { id: "I2", k: "intent",  s: "running",   t: "의도 2",      x: 0.10, y: 0.70, d: "fact 1 을 근거로 정해진 다음 방향. 인증 구성 확인 (예시)." },
+    { id: "I3", k: "intent",  s: "open",      t: "의도 3",      x: 0.34, y: 0.70, d: "아직 아무도 맡지 않은 대기 방향. 다음 실행 에이전트가 선점한다." },
+    { id: "F2", k: "fact",    s: "confirmed", t: "fact 2",      x: 0.09, y: 0.90, d: "의도 2 의 결과 (예시)." },
+    { id: "FD", k: "finding", s: "confirmed", t: "finding",     x: 0.23, y: 0.90, d: "의도 2 가 입증한 취약점 기록 (예시). 별도 테이블에도 레코드가 생긴다." },
+    { id: "A1", k: "asset", s: "root_domain", t: "example.test",      x: 0.78, y: 0.10, d: "루트 도메인 자산." },
+    { id: "A2", k: "asset", s: "subdomain",   t: "www",               x: 0.66, y: 0.30, d: "서브도메인 자산." },
+    { id: "A3", k: "asset", s: "subdomain",   t: "admin",             x: 0.88, y: 0.30, d: "서브도메인 자산." },
+    { id: "A4", k: "asset", s: "service",     t: "www:443",           x: 0.66, y: 0.52, d: "서비스 자산(포트 단위)." },
+    { id: "A5", k: "asset", s: "endpoint",    t: "/login",            x: 0.66, y: 0.74, d: "엔드포인트 자산." },
+    { id: "A6", k: "asset", s: "service",     t: "admin:443",         x: 0.88, y: 0.52, d: "서비스 자산(포트 단위)." },
+  ];
+  const E = [ // 탐색 간선 [from, rel, to]
+    ["G", "spawns", "I1"], ["O", "spawns", "I1"], ["I1", "yields", "F1"], ["F1", "derived_from", "I2"],
+    ["F1", "derived_from", "I3"], ["I2", "yields", "F2"], ["I2", "proves", "FD"],
+  ];
+  const H = [["A1", "A2"], ["A1", "A3"], ["A2", "A4"], ["A4", "A5"], ["A3", "A6"]];  // 자산 계층
+  const AN = [["I1", "A2"], ["F1", "A4"], ["I2", "A5"], ["F2", "A5"], ["FD", "A5"], ["I3", "A3"]]; // 앵커
+  const byId = Object.fromEntries(N.map((n) => [n.id, n]));
+  let sel = null, layer = "all";
+
+  function lineage(id) {
+    const out = new Set([id]);
+    const up = [id], dn = [id];
+    while (up.length) { const c = up.pop(); E.forEach(([a, , b]) => { if (b === c && !out.has(a)) { out.add(a); up.push(a); } }); }
+    while (dn.length) { const c = dn.pop(); E.forEach(([a, , b]) => { if (a === c && !out.has(b)) { out.add(b); dn.push(b); } }); }
+    return out;
+  }
+  const cv = MB.canvas("#cv-graph", (ctx, w, h) => {
+    const P = MB.palette();
+    const X = (n) => n.x * w, Y = (n) => n.y * h;
+    const kcol = { goal: P.text, intent: P.accent, fact: P.ok, finding: P.bad, asset: P.accent2 };
+    const lin = sel && byId[sel].k !== "asset" ? lineage(sel) : null;
+    const anchored = new Set();
+    if (sel) AN.forEach(([a, b]) => { if (a === sel) anchored.add(b); if (b === sel) anchored.add(a); });
+    const live = (id) => !sel || id === sel || (lin && lin.has(id)) || anchored.has(id) ||
+      (byId[sel].k === "asset" && H.some(([p, c]) => (p === sel && c === id) || (c === sel && p === id)));
+    function line(a, b, dash, color, active) {
+      ctx.save(); ctx.globalAlpha = active ? 0.95 : 0.18; ctx.strokeStyle = color; ctx.lineWidth = active ? 2 : 1.3; ctx.setLineDash(dash);
+      ctx.beginPath(); ctx.moveTo(X(a), Y(a)); ctx.lineTo(X(b), Y(b)); ctx.stroke(); ctx.restore();
+    }
+    function arrow(a, b, active) {
+      const dx = X(b) - X(a), dy = Y(b) - Y(a), L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
+      ctx.save(); ctx.globalAlpha = active ? 0.95 : 0.18; ctx.strokeStyle = P.axis; ctx.fillStyle = P.axis; ctx.lineWidth = active ? 2 : 1.3;
+      MB.arrow(ctx, X(a) + ux * 20, Y(a) + uy * 20, X(b) - ux * 22, Y(b) - uy * 22, 8); ctx.restore();
+    }
+    if (layer !== "anchor") E.forEach(([a, , b]) => arrow(byId[a], byId[b], !sel || (lin && lin.has(a) && lin.has(b)) || (byId[sel].k === "asset" && false)));
+    if (layer === "all") H.forEach(([a, b]) => line(byId[a], byId[b], [], P.axis, !sel || (live(a) && live(b))));
+    if (layer !== "expl") AN.forEach(([a, b]) => line(byId[a], byId[b], [5, 4], P.dim, !sel || a === sel || b === sel));
+    ctx.font = "600 12px " + getComputedStyle(document.body).getPropertyValue("--font");
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    N.forEach((n) => {
+      const on = live(n.id), r = n.k === "asset" ? 15 : 17;
+      ctx.globalAlpha = on ? 1 : 0.28;
+      ctx.fillStyle = P.bg; ctx.beginPath(); ctx.arc(X(n), Y(n), r + 3, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = kcol[n.k]; ctx.globalAlpha = (on ? 0.9 : 0.25);
+      ctx.beginPath(); ctx.arc(X(n), Y(n), r, 0, 6.2832); ctx.fill();
+      if (n.id === sel) { ctx.globalAlpha = 1; ctx.strokeStyle = P.text; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(X(n), Y(n), r + 5, 0, 6.2832); ctx.stroke(); }
+      ctx.globalAlpha = on ? 1 : 0.4; ctx.fillStyle = P.text;
+      ctx.fillText(n.t, X(n), Y(n) + r + 13);
+    });
+    ctx.globalAlpha = 1; ctx.fillStyle = P.dim; ctx.font = "600 12px " + getComputedStyle(document.body).getPropertyValue("--font");
+    ctx.textAlign = "left"; ctx.fillText("탐색 그래프 (작업별)", 12, 14);
+    ctx.textAlign = "right"; ctx.fillText("자산 그래프 (전역)", w - 12, 14);
+    ctx.strokeStyle = P.border; ctx.setLineDash([3, 5]); ctx.beginPath(); ctx.moveTo(w * 0.52, 26); ctx.lineTo(w * 0.52, h - 10); ctx.stroke(); ctx.setLineDash([]);
+  }, { height: 470 });
+
+  function select(id) {
+    sel = id; const n = id ? byId[id] : null;
+    MB.stat("g-sel", n ? MB.esc(n.t) : "—");
+    MB.stat("g-kind", n ? MB.esc(n.k + " · " + n.s) : "—");
+    if (!n) { MB.stat("g-lin", "—"); MB.stat("g-anc", "—"); cv.redraw(); return; }
+    const l = n.k === "asset" ? null : lineage(id);
+    MB.stat("g-lin", l ? String(l.size) : "—");
+    MB.stat("g-anc", String(AN.filter(([a, b]) => a === id || b === id).length));
+    const link = AN.filter(([a, b]) => a === id || b === id).map(([a, b]) => byId[a === id ? b : a].t);
+    document.getElementById("g-detail").innerHTML = "<b>" + MB.esc(n.t) + "</b> — " + MB.esc(n.d) +
+      (link.length ? "<br>앵커 연결: " + link.map(MB.esc).join(", ") : "<br>앵커 연결 없음");
+    cv.redraw();
+  }
+  cv.canvas.addEventListener("click", (e) => {
+    const r = cv.canvas.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+    let best = null, bd = 26;
+    N.forEach((n) => { const d = Math.hypot(n.x * cv.w - px, n.y * cv.h - py); if (d < bd) { bd = d; best = n.id; } });
+    select(best === sel ? null : best);
+  });
+  MB.seg("g-layer", (v) => { layer = v; cv.redraw(); });
+
+  /* ------------------------------------------------ 시뮬레이터 2: 커버리지 계산기 */
+  const A = [
+    { n: "example.test",           t: "root_domain", dom: "example.test",       root: "example.test", ip: "",              f: true },
+    { n: "www.example.test",       t: "subdomain",   dom: "www.example.test",   root: "example.test", ip: "",              f: true },
+    { n: "admin.example.test",     t: "subdomain",   dom: "admin.example.test", root: "example.test", ip: "",              f: false },
+    { n: "www.example.test:443",   t: "service",     dom: "www.example.test",   root: "example.test", ip: "",              f: true },
+    { n: "www.example.test/login", t: "endpoint",    dom: "www.example.test",   root: "example.test", ip: "",              f: false },
+    { n: "shop.example.org",       t: "subdomain",   dom: "shop.example.org",   root: "example.org",  ip: "",              f: true },
+    { n: "203.0.113.7",            t: "ip",          dom: "",                   root: "",             ip: "203.0.113.7",   f: false },
+    { n: "198.51.100.20",          t: "ip",          dom: "",                   root: "",             ip: "198.51.100.20", f: false },
+    { n: "198.51.100.20:8080",     t: "service",     dom: "",                   root: "",             ip: "198.51.100.20", f: true },
+  ];
+  const tb = document.querySelector("#cov-table tbody");
+  tb.innerHTML = A.map((a, i) => `<tr><td><code>${MB.esc(a.n)}</code></td><td>${MB.esc(a.t)}</td><td class="c" id="in${i}"></td><td class="c"><input type="checkbox" data-i="${i}" ${a.f ? "checked" : ""} aria-label="${MB.esc(a.n)} fact 앵커"></td></tr>`).join("");
+  const sc = () => ({ root: document.querySelector('.scope[data-k=root]').checked, sub: document.querySelector('.scope[data-k=sub]').checked, ip: document.querySelector('.scope[data-k=ip]').checked, cidr: document.querySelector('.scope[data-k=cidr]').checked });
+  function inScope(a, s) {
+    return (s.root && a.root === "example.test") || (s.sub && a.dom === "admin.example.test") ||
+      (s.ip && a.ip === "203.0.113.7") || (s.cidr && a.ip.startsWith("198.51.100."));
+  }
+  function cov() {
+    const s = sc(); let S = 0, hit = 0; const back = [];
+    A.forEach((a, i) => {
+      const ins = inScope(a, s);
+      const cell = document.getElementById("in" + i);
+      cell.innerHTML = ins ? '<span class="pill ok">범위 안</span>' : '<span class="pill">밖</span>';
+      if (ins) { S++; if (a.f) hit++; else back.push(a.n); }
+    });
+    MB.stat("c-s", String(S)); MB.stat("c-a", String(hit));
+    MB.stat("c-cov", S ? (100 * hit / S).toFixed(0) + "%" : "—");
+    MB.stat("c-back", String(back.length));
+    document.getElementById("c-bar").style.width = (S ? 100 * hit / S : 0) + "%";
+  }
+  document.querySelectorAll("#cov-table input").forEach((c) => c.addEventListener("change", () => { A[+c.dataset.i].f = c.checked; cov(); }));
+  document.querySelectorAll(".scope").forEach((c) => c.addEventListener("change", cov));
+  document.getElementById("cov-all").addEventListener("click", () => { A.forEach((a, i) => { a.f = true; document.querySelector(`#cov-table input[data-i="${i}"]`).checked = true; }); cov(); });
+  document.getElementById("cov-none").addEventListener("click", () => { A.forEach((a, i) => { a.f = false; document.querySelector(`#cov-table input[data-i="${i}"]`).checked = false; }); cov(); });
+  cov();
+})();
+</script>
+</body>
+</html>

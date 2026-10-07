@@ -17,7 +17,7 @@
   // 장 파일을 올릴 때 해당 항목에 ready: true 를 추가한다.
   const CHAPTERS = [
     { slug: "overview",  num: "01", title: "전체 구조 한눈에",        desc: "ARTEX 가 풀려는 문제, 패키지 지도, 코드 규모, 기술 스택. 이 책을 읽는 순서.", tags: ["개관", "sim"], ready: true },
-    { slug: "graphs",    num: "02", title: "이중 그래프",             desc: "탐색 그래프와 자산 그래프, 그리고 둘을 잇는 앵커. 노드·간선·상태의 설계와 커버리지 정의.", tags: ["데이터", "sim"] },
+    { slug: "graphs",    num: "02", title: "이중 그래프",             desc: "탐색 그래프와 자산 그래프, 그리고 둘을 잇는 앵커. 노드·간선·상태의 설계와 커버리지 정의.", tags: ["데이터", "sim"], ready: true },
     { slug: "agents",    num: "03", title: "에이전트 역할 구성",       desc: "목표 분해 · 계획 · 실행 · 사람 인터페이스. 역할별 도구 권한과 책임 경계.", tags: ["에이전트", "sim"] },
     { slug: "engine",    num: "04", title: "엔진과 의도 생명주기",     desc: "이벤트 구동 폐곡선, 디바운스와 하트비트, 의도 상태 전이, 재시도와 수습 단계.", tags: ["엔진", "sim"] },
     { slug: "planning",  num: "05", title: "계획 연속성과 기억 압축",  desc: "무상태 세션 위의 공유 할 일 목록, 실행 과정 교환, 콜드 다이제스트 압축.", tags: ["메모리", "sim"] },
