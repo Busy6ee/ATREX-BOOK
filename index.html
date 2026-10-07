@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ATREX-BOOK · 자율 에이전트 해부서</title>
+<meta name="description" content="LLM 이 조종하는 자율 에이전트 시스템 ARTEX 의 아키텍처, 에이전트 구성, 상태 관리, 안전장치, 방어 관점을 코드 수준에서 해설하는 학습서.">
+<link rel="canonical" href="https://busy6ee.github.io/ATREX-BOOK/">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%232f5bd6'/%3E%3Cstop offset='1' stop-color='%23c2570c'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='2' y='2' width='28' height='28' rx='8' fill='url(%23g)'/%3E%3Ccircle cx='16' cy='9.5' r='2.6' fill='%23fff'/%3E%3Ccircle cx='9' cy='22' r='2.6' fill='%23fff'/%3E%3Ccircle cx='23' cy='22' r='2.6' fill='%23fff'/%3E%3Cpath d='M15 12l-5 8M17 12l5 8M12 22h8' stroke='%23fff' stroke-width='1.7' stroke-linecap='round' fill='none'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#2f5bd6">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ATREX-BOOK">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:title" content="ATREX-BOOK · 자율 에이전트 해부서">
+<meta property="og:description" content="LLM 이 조종하는 자율 에이전트 시스템 ARTEX 의 설계를 코드 수준에서 해설하는 학습서.">
+<meta property="og:url" content="https://busy6ee.github.io/ATREX-BOOK/">
+<link rel="stylesheet" href="css/style.css">
+<script src="js/common.js"></script>
+<style>
+  .ch-card.soon { opacity: .62; cursor: default; }
+  .ch-card.soon:hover { transform: none; border-color: var(--border); }
+  .path .steps .soon { background: var(--surface); color: var(--text-faint); cursor: default; }
+  .path .steps .soon:hover { filter: none; }
+  .hero-canvas { min-height: 300px; }
+  .home-hero h1 .grad { white-space: nowrap; }
+</style>
+</head>
+<body>
+<header class="home-hero">
+  <div class="inner">
+    <div>
+      <div class="eyebrow">Autonomous Agent Anatomy</div>
+      <h1>자율 에이전트를 <span class="grad">코드 수준으로</span> 해부한다</h1>
+      <p>ARTEX 는 LLM 이 조종하는 여러 에이전트가 스스로 목표를 쪼개고, 도구를 실행하고, 결과를 그래프에 쌓으며 장시간 작업을 이끄는 시스템입니다. 이 책은 그 설계를 아키텍처, 상태 관리, 안전장치, 방어 관점에서 읽습니다.</p>
+      <div class="cta">
+        <a class="primary" href="chapters/overview.html">1장부터 읽기</a>
+        <a class="ghost" href="#chapters">챕터 목록</a>
+      </div>
+      <div class="hero-badges"><span>방어 · 학습 목적</span><span>인터랙티브 시뮬레이터</span><span id="b-ready">공개 챕터</span></div>
+      <noscript><p>이 사이트의 내비게이션과 챕터 목록은 JavaScript 로 만들어집니다. <a href="chapters/overview.html">1장 · 전체 구조 한눈에</a>를 직접 열어 읽을 수 있습니다.</p></noscript>
+    </div>
+    <div class="hero-canvas">
+      <canvas id="cv-hero" role="img" aria-label="탐색 그래프와 자산 그래프를 앵커로 잇는 개념도"></canvas>
+      <div class="hint">개념도 · 탐색 그래프와 자산 그래프</div>
+    </div>
+  </div>
+</header>
+
+<div class="notice">
+  <div class="callout warn">
+    <strong>해설서의 선</strong>
+    <p>ARTEX 는 허가받은 환경에서 침투 테스트를 자동화하는 도구입니다. 이 책은 그 도구를 <b>자율 에이전트 시스템의 설계 사례</b>로 읽습니다. 에이전트의 프롬프트 원문, 공격 절차, 페이로드는 싣지 않습니다. 허가 없는 대상에 대한 사용은 불법입니다.</p>
+  </div>
+</div>
+
+<section class="home-section" id="numbers">
+  <h2>숫자로 보는 구조</h2>
+  <p class="sub">분석 대상 artex-ko 커밋 <code>2271af6</code> 에서 테스트 파일을 제외하고 직접 센 값입니다. 해석은 1장에서 다룹니다.</p>
+  <div class="numbers">
+    <div><b>6.4만</b><span>Go 백엔드 줄 수</span></div>
+    <div><b>71%</b><span>server + db 코드 비중</span></div>
+    <div><b>7.5k</b><span>agent 패키지 줄 수</span></div>
+    <div><b>49</b><span>DB 테이블 수</span></div>
+  </div>
+</section>
+
+<section class="home-section tight" id="chapters">
+  <h2>챕터</h2>
+  <p class="sub">앞 장에서 뒤 장으로 이어지도록 구성했습니다. 공개된 장만 열립니다.</p>
+  <div class="ch-grid" id="ch-grid"></div>
+</section>
+
+<section class="home-section tight" id="paths">
+  <h2>읽는 순서</h2>
+  <p class="sub">관심사에 맞춰 골라 읽을 수 있습니다.</p>
+  <div class="paths" id="path-list"></div>
+</section>
+
+<script>
+(function () {
+  // 공개된 챕터 slug. 새 챕터를 올릴 때 여기에 추가하면 카드와 읽기 순서가 링크로 바뀐다.
+  const READY = ["overview"];
+  const CH = MB.CHAPTERS;
+  const bySlug = (s) => CH.find((c) => c.slug === s);
+
+  document.getElementById("b-ready").textContent = READY.length + " / " + CH.length + "장 공개";
+
+  // 챕터 카드
+  const TAG = { sim: "시뮬레이터", "3d": "3D" };
+  document.getElementById("ch-grid").innerHTML = CH.map((c) => {
+    const ready = READY.includes(c.slug);
+    const tags = (c.tags || []).map((t) => `<span${t === "sim" ? ' class="tag-sim"' : ""}>${MB.esc(TAG[t] || t)}</span>`).join("");
+    const body = `<span class="num">CHAPTER ${MB.esc(c.num)}</span><h3>${MB.esc(c.title)}</h3><p>${MB.esc(c.desc)}</p><div class="tags">${ready ? "" : "<span>준비 중</span>"}${tags}</div>`;
+    return ready
+      ? `<a class="ch-card" href="chapters/${c.slug}.html">${body}</a>`
+      : `<div class="ch-card soon" aria-disabled="true">${body}</div>`;
+  }).join("");
+
+  // 읽는 순서
+  const PATHS = [
+    { t: "설계 전체 훑기", d: "에이전트 시스템의 뼈대만 빠르게.", s: ["graphs", "agents", "engine", "safety"] },
+    { t: "에이전트 설계자", d: "역할 분리, 프롬프트, 도구 구성.", s: ["agents", "planning", "tools", "prompt"] },
+    { t: "플랫폼 · SRE", d: "복원력, 운영, 업데이트.", s: ["engine", "llm", "server"] },
+    { t: "보안 방어팀", d: "무엇을 관측하고 어디를 조일지.", s: ["safety", "evidence", "defense"] },
+  ];
+  document.getElementById("path-list").innerHTML = PATHS.map((p) => {
+    const steps = p.s.map((slug) => {
+      const c = bySlug(slug);
+      return READY.includes(slug)
+        ? `<a href="chapters/${slug}.html">${MB.esc(c.num)}</a>`
+        : `<a class="soon" aria-disabled="true" title="준비 중">${MB.esc(c.num)}</a>`;
+    }).join("");
+    return `<div class="path"><h3>${MB.esc(p.t)}</h3><p>${MB.esc(p.d)}</p><div class="steps">${steps}</div></div>`;
+  }).join("");
+
+  // 히어로 개념도: 탐색 그래프(왼쪽) · 자산 그래프(오른쪽) · 둘을 잇는 앵커
+  const rnd = MB.rng(11);
+  const nodes = [], edges = [], anchors = [];
+  function cluster(cx, side) {
+    const base = nodes.length;
+    nodes.push({ x: cx, y: 0.5, side, hub: true, ph: rnd() * 6.28 });
+    const n = 9;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + (rnd() - 0.5) * 0.5;
+      const r = 0.45 + rnd() * 0.55;
+      nodes.push({ x: cx + Math.cos(a) * r * 0.17, y: 0.5 + Math.sin(a) * r * 0.3, side, hub: false, ph: rnd() * 6.28 });
+    }
+    for (let i = 0; i < n; i++) {
+      edges.push([base + 1 + i, base + 1 + ((i + 1) % n), side]);
+      if (i % 2 === 0) edges.push([base, base + 1 + i, side]);
+    }
+    return nodes.slice(base + 1, base + 1 + n).map((_, i) => base + 1 + i);
+  }
+  const left = cluster(0.25, 0), right = cluster(0.75, 1);
+  const lEdge = left.slice().sort((a, b) => nodes[b].x - nodes[a].x).slice(0, 4);
+  const rEdge = right.slice().sort((a, b) => nodes[a].x - nodes[b].x).slice(0, 4);
+  lEdge.sort((a, b) => nodes[a].y - nodes[b].y); rEdge.sort((a, b) => nodes[a].y - nodes[b].y);
+  lEdge.forEach((a, i) => anchors.push([a, rEdge[i], 2]));
+
+  const reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  let tt = 0;
+  const cv = MB.canvas("#cv-hero", (ctx, w, h) => {
+    const P = MB.palette();
+    const col = [P.accent, P.accent2, P.text];
+    const X = (i) => nodes[i].x * w, Y = (i) => nodes[i].y * h;
+    ctx.lineCap = "round";
+    ctx.lineWidth = 1.2; ctx.strokeStyle = P.axis; ctx.globalAlpha = 0.6;
+    edges.forEach(([a, b]) => { ctx.beginPath(); ctx.moveTo(X(a), Y(a)); ctx.lineTo(X(b), Y(b)); ctx.stroke(); });
+    ctx.setLineDash([5, 4]); ctx.strokeStyle = P.dim; ctx.globalAlpha = 0.85;
+    anchors.forEach(([a, b]) => { ctx.beginPath(); ctx.moveTo(X(a), Y(a)); ctx.lineTo(X(b), Y(b)); ctx.stroke(); });
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    // 신호가 간선을 따라 흐르는 모습
+    edges.concat(anchors).forEach(([a, b, s], k) => {
+      if (k % 2) return;
+      const u = reduce ? 0.5 : (tt * 0.32 + k * 0.173) % 1;
+      const x = MB.lerp(X(a), X(b), u), y = MB.lerp(Y(a), Y(b), u);
+      ctx.fillStyle = col[s]; ctx.globalAlpha = 0.9;
+      ctx.beginPath(); ctx.arc(x, y, 2.6, 0, 6.2832); ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+    nodes.forEach((n, i) => {
+      const pulse = reduce ? 0 : Math.sin(tt * 1.6 + n.ph);
+      const r = (n.hub ? 8 : 4.6) + pulse * 0.9;
+      ctx.fillStyle = P.bg; ctx.beginPath(); ctx.arc(X(i), Y(i), r + 2.2, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = col[n.side]; ctx.globalAlpha = 0.8 + pulse * 0.2;
+      ctx.beginPath(); ctx.arc(X(i), Y(i), r, 0, 6.2832); ctx.fill(); ctx.globalAlpha = 1;
+    });
+    ctx.font = "600 13px " + getComputedStyle(document.body).getPropertyValue("--font");
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = P.accent; ctx.fillText("탐색 그래프", w * 0.25, h * 0.1);
+    ctx.fillStyle = P.accent2; ctx.fillText("자산 그래프", w * 0.75, h * 0.1);
+    ctx.fillStyle = P.dim; ctx.font = "500 12px " + getComputedStyle(document.body).getPropertyValue("--font");
+    ctx.fillText("앵커", w * 0.5, h * 0.5 - 14);
+  }, { aspect: 0.82, minHeight: 300, maxHeight: 440 });
+  if (!reduce) MB.loop(cv.canvas.parentElement, (dt, t) => { tt = t; cv.redraw(); });
+})();
+</script>
+</body>
+</html>

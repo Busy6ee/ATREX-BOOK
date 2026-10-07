@@ -55,10 +55,12 @@ KaTeX 는 모든 챕터에 넣고, three.js 두 줄은 3D 페이지에만 넣는
 1. `chapters/<slug>.html` 을 만들고 `<body data-chapter="<slug>">` 를 지정한다. 구조는 `chapters/overview.html` 을 따른다.
 2. `js/common.js` 의 `CHAPTERS` 배열에 `slug · num · title · desc · tags` 를 등록한다. 상단바, 챕터 서랍, 우측 목차, 이전/다음, 검색은 이 배열을 기준으로 자동 생성된다.
 3. 3D 를 쓰면 `tags` 에 `"3d"` 를 넣고 위 head 템플릿의 three.js 두 줄을 추가한다.
+4. `index.html` 스크립트 상단의 `READY` 배열에 slug 를 추가한다. 추가하기 전까지 홈의 챕터 카드와 읽는 순서에서 "준비 중"으로 표시된다.
 
 ## 알려진 공백
 
-`index.html`, `favicon.svg`, `og.png` 는 아직 저장소에 없다. 챕터가 이 경로를 참조하므로 루트 주소와 아이콘은 이들을 추가할 때까지 동작하지 않는다.
+- `favicon.svg`, `og.png` 는 아직 저장소에 없다. 챕터가 이 경로를 참조하므로 탭 아이콘과 공유 미리보기는 추가할 때까지 비어 있다. 홈은 아이콘을 인라인으로 넣어 영향이 없다.
+- 상단 챕터 서랍과 이전/다음 링크는 `CHAPTERS` 전체를 가리킨다. 아직 쓰지 않은 장으로 가는 링크는 404 가 된다. 홈만 `READY` 로 공개 여부를 구분한다.
 
 ## 라이선스
 
