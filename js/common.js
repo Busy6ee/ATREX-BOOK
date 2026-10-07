@@ -1,3 +1,6 @@
+/* 전역 MB 헬퍼의 구성 방식(레이아웃 자동 생성, canvas·range·seg 헬퍼, three.js 씬 헬퍼)은
+   geniuskey/memorybook(MIT, Copyright (c) 2026 geniuskey and MemoryBook contributors)의
+   정적 사이트 규약을 따른다. 고지 전문은 ../LICENSE-MIT 와 ../NOTICE.md 에 있다. */
 /* ==========================================================================
    ATREX-BOOK 공통 스크립트 — 전역 객체 MB
    - 레이아웃(상단바, 챕터 서랍, 목차, 이전/다음, 푸터, 테마, 검색) 자동 생성
@@ -227,6 +230,7 @@
       return null;
     }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    if (THREE.sRGBEncoding) renderer.outputEncoding = THREE.sRGBEncoding; // r147 기본값은 선형 출력이라 색이 탁해진다
     container.appendChild(renderer.domElement);
     renderer.domElement.style.display = "block";
     const scene = new THREE.Scene();
