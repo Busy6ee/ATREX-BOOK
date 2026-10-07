@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>에이전트 역할 구성 · ATREX-BOOK</title>
+<meta name="description" content="목표 분해, 계획, 실행, 사람 인터페이스로 나뉜 에이전트 역할과 역할별 도구 권한, 책임 경계를 최소 권한 관점에서 해설한다.">
+<link rel="canonical" href="https://busy6ee.github.io/ATREX-BOOK/chapters/agents.html">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<meta name="theme-color" content="#2f5bd6">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="ATREX-BOOK">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:title" content="에이전트 역할 구성 · ATREX-BOOK">
+<meta property="og:description" content="목표 분해, 계획, 실행, 사람 인터페이스로 나뉜 에이전트 역할과 역할별 도구 권한, 책임 경계를 최소 권한 관점에서 해설한다.">
+<meta property="og:url" content="https://busy6ee.github.io/ATREX-BOOK/chapters/agents.html">
+<meta property="og:image" content="https://busy6ee.github.io/ATREX-BOOK/og.png">
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/common.js"></script>
+<style>
+  .perm td, .perm th { padding: 6px 10px; font-size: 13.5px; }
+  .perm td.c { text-align: center; font-family: var(--mono); }
+  .perm tr { cursor: pointer; }
+  .perm tr.sel td { background: var(--accent-soft); }
+  .perm td.col { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+  .perm .yes { color: var(--ok); font-weight: 700; }
+  .perm .no { color: var(--text-faint); }
+  .perm .opt { color: var(--warn); font-weight: 700; }
+  .cls-bars { display: grid; gap: 8px; padding: 14px 18px; background: var(--bg-elev); border-top: 1px solid var(--border); }
+  .cls-row { display: grid; grid-template-columns: 110px 1fr 28px; gap: 10px; align-items: center; font-size: 13px; color: var(--text-dim); }
+  .cls-row .bar { height: 10px; border-radius: 5px; background: var(--surface-2); overflow: hidden; }
+  .cls-row .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  .cls-row.w .bar i { background: var(--accent-2); } .cls-row.c .bar i { background: var(--bad); } .cls-row.s .bar i { background: var(--warn); }
+  #f-note, #p-note { font-size: 14px; color: var(--text-dim); line-height: 1.65; }
+  #f-note b, #p-note b { color: var(--text); }
+</style>
+</head>
+<body data-chapter="agents">
+<main class="chapter">
+  <header class="chapter-hero">
+    <div class="eyebrow">Chapter 03</div>
+    <h1>에이전트 역할 구성</h1>
+    <p class="lead">ARTEX 는 하나의 만능 에이전트 대신 목표 분해, 계획, 실행, 사람 인터페이스로 역할을 쪼갭니다. 쪼갠 이유는 성능보다 통제에 가깝습니다. 역할마다 읽고 쓸 수 있는 도구가 달라서, 한 에이전트가 잘못 판단해도 피해가 그 역할의 권한 안에 머뭅니다.</p>
+    <ul class="objectives">
+      <li>네 가지 핵심 역할의 입력, 출력, 수명, 책임을 구분한다</li>
+      <li>역할별 도구 세트를 읽기, 기록, 흐름 제어, 범위 설정으로 분류해 최소 권한 설계를 평가한다</li>
+      <li>한 의도가 역할 사이를 지나가는 순서를 그릴 수 있다</li>
+    </ul>
+  </header>
+
+  <section id="map">
+    <h2>역할 지도</h2>
+    <p>코드 위치는 <code>agent/</code> 패키지입니다. 오케스트레이션(어떤 역할을 언제 깨우는가)은 서버의 엔진이 맡고(<a data-ch="engine"></a>장), 이 장은 역할 자체의 설계를 봅니다.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>역할</th><th>언제 도는가</th><th>무엇을 읽고 쓰는가</th><th>수명</th></tr></thead>
+      <tbody>
+        <tr><td><b>goals</b><br><span class="en">목표 분해기</span></td><td>작업을 만들 때 한 번</td><td>사용자의 서술에서 최종 목표와 조작 제약(허용/금지)을 뽑아 기록한다</td><td>한 번 실행하고 끝</td></tr>
+        <tr><td><b>planner</b><br><span class="en">계획자</span></td><td>그래프가 바뀔 때마다, 그리고 주기적 하트비트</td><td>그래프 현황을 읽고, 새 의도를 추가하고, 목표 달성을 판정한다. 직접 실행하지 않는다</td><td>깨어날 때마다 새 세션</td></tr>
+        <tr><td><b>worker</b><br><span class="en">실행자 ×N</span></td><td>대기 중인 의도가 있을 때</td><td>의도 하나를 맡아 도구로 수행하고 사실, 자산, 취약점을 기록한 뒤 멈춘다</td><td>의도 하나가 끝나면 종료</td></tr>
+        <tr><td><b>mainagent</b><br><span class="en">사람 인터페이스</span></td><td>사람이 대화를 걸 때</td><td>현황 조회, 힌트와 의도 직접 주입, 실행 중인 의도에 지시, 목표와 제약 수정</td><td>사람의 대화 세션</td></tr>
+      </tbody>
+    </table></div>
+    <p>이 네 역할 외에 <b>대화형 에이전트</b> 계열이 있습니다. 플랫폼 운영을 도와주는 운영 보조(Auto), 취약점이 등록되면 보고서를 쓰는 보고서 작성 에이전트, 사용자가 만든 사용자 정의 에이전트가 같은 대화 하네스 위에서 돕니다. 이들은 작업 그래프 밖에서 동작하며, 트리거(<a data-ch="server"></a>장)로 깨울 수 있습니다.</p>
+  </section>
+
+  <section id="flow">
+    <h2>한 의도가 지나가는 길</h2>
+    <p>역할이 분리되어 있으므로 하나의 탐색 방향은 여러 역할을 거쳐 갑니다. 아래 시뮬레이터는 그 순서를 단계별로 보여 줍니다. 가운데 세로선이 각 역할이고, 오른쪽 끝이 공유 저장소(PostgreSQL 의 두 그래프)입니다. <b>역할끼리 직접 대화하지 않고 저장소를 통해서만 간접적으로 만난다</b>는 점을 확인하세요.</p>
+
+    <div class="sim" id="sim-flow">
+      <div class="sim-head"><span class="sim-tag">SIMULATOR</span><h3>의도 하나의 여정</h3></div>
+      <div class="sim-body">
+        <div class="sim-view"><canvas id="cv-flow"></canvas></div>
+        <div class="sim-controls">
+          <div class="btn-row"><button class="btn" id="f-prev">← 이전</button><button class="btn primary" id="f-next">다음 →</button><button class="btn" id="f-reset">처음</button></div>
+          <div id="f-note"></div>
+        </div>
+      </div>
+      <div class="sim-readout">
+        <div class="stat"><span class="k">단계</span><span class="v" id="f-step">—</span></div>
+        <div class="stat"><span class="k">행위자</span><span class="v" id="f-actor">—</span></div>
+        <div class="stat"><span class="k">상호작용 대상</span><span class="v" id="f-target">—</span></div>
+      </div>
+      <div class="sim-note">해볼 것: 9단계에서 DB 가 planner 를 다시 깨우는 점에 주목하세요. 이 되먹임이 <a data-ch="engine"></a>장의 이벤트 구동 폐곡선입니다. 마지막 단계는 사람이 실행 중인 의도에 개입하는 경로입니다.</div>
+    </div>
+  </section>
+
+  <section id="perm">
+    <h2>최소 권한: 역할별 도구 권한</h2>
+    <p>도구는 코드의 <code>ToolSet</code> 에 정의되고, 역할마다 다른 부분집합이 주어집니다. 아래 행렬은 소스의 역할별 도구 목록(<code>PlannerTools</code>, <code>WorkerTools</code>, <code>MainAgentTools</code>, 목표 분해기)을 그대로 옮기고, 도구를 성격별로 네 가지로 분류한 것입니다.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>분류</th><th>뜻</th><th>예</th></tr></thead>
+      <tbody>
+        <tr><td><span class="pill acc">읽기 R</span></td><td>그래프와 기록을 조회한다. 부작용이 없다</td><td>그래프 개요, 취약점 목록, 노드 상세</td></tr>
+        <tr><td><span class="pill warn">기록 W</span></td><td>그래프에 사실, 자산, 취약점을 쓴다</td><td>사실 기록, 자산 등록, 취약점 등록</td></tr>
+        <tr><td><span class="pill bad">흐름 제어 C</span></td><td>탐색의 방향과 진행을 바꾼다</td><td>의도 추가, 실행 중단, 실행 중 지시, 목표 달성 선언</td></tr>
+        <tr><td><span class="pill">범위 설정 S</span></td><td>목표, 제약, 테스트 범위 같은 경계를 바꾼다</td><td>목표 설정, 제약 설정, 범위 추가</td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="sim" id="sim-perm">
+      <div class="sim-head"><span class="sim-tag">SIMULATOR</span><h3>역할 × 도구 권한 행렬</h3></div>
+      <div class="sim-body side">
+        <div class="sim-view pad">
+          <div class="table-wrap" style="margin:0"><table class="perm" id="perm-table">
+            <thead><tr><th>도구</th><th class="c">분류</th><th class="c">goals</th><th class="c">planner</th><th class="c">worker</th><th class="c">main</th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+        </div>
+        <div class="sim-controls">
+          <div class="ctrl"><span>강조할 역할</span><div class="seg" id="p-role"><button data-value="planner" class="on">planner</button><button data-value="worker">worker</button><button data-value="main">main</button><button data-value="goals">goals</button></div></div>
+          <div id="p-note">행을 눌러 도구의 쓰임과 왜 어떤 역할에는 주지 않았는지 확인하세요.</div>
+        </div>
+      </div>
+      <div class="cls-bars" id="cls-bars"></div>
+      <div class="sim-readout">
+        <div class="stat"><span class="k">선택한 역할</span><span class="v" id="p-r">—</span></div>
+        <div class="stat"><span class="k">도메인 도구 수</span><span class="v" id="p-n">—</span></div>
+        <div class="stat"><span class="k">제어·범위 도구 비중</span><span class="v" id="p-cs">—</span></div>
+      </div>
+      <div class="sim-note">표기: <b>✓</b> 기본 부여, <b>○</b> 도구는 존재하지만 기본으로 어느 역할에도 연결하지 않음(운영자가 명시적으로 연결해야 사용 가능). 공통 기본 도구(파일 읽기·쓰기, 셸 등)는 이 표에 넣지 않았고, 실행자에게는 그중 일부(다중 편집, 파일 검색)가 의도적으로 빠져 있습니다.</div>
+    </div>
+
+    <div class="callout">
+      <strong>이 행렬에서 읽을 수 있는 설계 판단</strong>
+      <ul>
+        <li><b>실행자(worker)는 계획을 만들지 못한다.</b> 의도 추가, 목표 판정, 실행 중단 도구가 없다. 한 의도만 맡고 결과를 쓰고 끝난다.</li>
+        <li><b>계획자(planner)는 사실을 쓰지 못한다.</b> 사실 기록과 자산 등록 도구가 없다. 결과는 실행자만 만든다. 계획자는 읽고 방향을 정한다.</li>
+        <li><b>범위와 제약을 바꾸는 권한은 가장 좁다.</b> 목표 분해기와 사람 인터페이스, 그리고 계획자의 범위 도구에 한정되고 실행자에게는 없다. 실행자가 스스로 허용 범위를 넓힐 수 없다.</li>
+        <li><b>한 번에 전체 작업을 끝내 버리는 도구는 기본으로 막아 둔다.</b> 목표 달성 일괄 선언 도구(<code>goal_met</code>)는 목록에는 있지만 어느 역할에도 기본 연결하지 않았다. 개별 목표를 증명해 가는 경로와 겹치고 오판 비용이 크기 때문이다.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="why">
+    <h2>역할을 나눈 이유</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>분리</th><th>얻는 것</th><th>치르는 것</th></tr></thead>
+      <tbody>
+        <tr><td>계획과 실행의 분리</td><td>실행 에이전트의 컨텍스트가 한 의도로 좁아져 길어도 목적을 잃지 않는다. 계획자는 짧은 세션을 자주 돌려 비용을 통제한다</td><td>둘 사이의 정보가 저장소를 거치므로 기록이 부실하면 계획이 흔들린다</td></tr>
+        <tr><td>사람 개입 경로를 별도 역할로</td><td>사람의 지시가 자율 흐름의 규칙(의도 선점, 상태 전이)을 우회하지 않고 같은 저장소 규칙을 따른다</td><td>사람이 넣은 의도도 같은 큐에서 경쟁한다</td></tr>
+        <tr><td>목표 분해를 한 번만</td><td>목표와 제약이 작업 시작 시점에 고정되어 이후 에이전트가 경계를 흔들 수 없다</td><td>중간에 바꾸려면 사람이 명시적으로 수정해야 한다</td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout warn">
+      <strong>역할 분리가 보안 경계는 아니다</strong>
+      <p>도구 권한 분리는 "모델이 실수했을 때 피해의 범위"를 줄일 뿐, 악의적 입력에 대한 방어선이 아닙니다. 실행자는 공통 기본 도구(셸 포함)를 갖고 있어, 실제 부작용의 통제는 모든 도구 호출이 지나는 게이트와 사람 승인(<a data-ch="safety"></a>장)이 담당합니다. 역할 권한은 첫 번째 층, 게이트는 두 번째 층으로 읽어야 합니다.</p>
+    </div>
+  </section>
+
+  <section id="knobs">
+    <h2>에이전트마다 주입되는 설정</h2>
+    <p>각 역할 객체는 생성 후 여러 설정 함수로 조정됩니다. 값을 상수로 박지 않고 <b>함수로 주입</b>하는 것이 특징입니다. 호출 시점마다 최신 설정을 읽으므로 UI 에서 바꾼 값이 재시작 없이 다음 실행부터 반영됩니다.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>설정</th><th>적용 역할</th><th>역할</th></tr></thead>
+      <tbody>
+        <tr><td>압축 창 크기</td><td>planner, worker, main</td><td>컨텍스트가 창을 넘기 전에 압축한다(<a data-ch="planning"></a>장)</td></tr>
+        <tr><td>콜드 다이제스트 압축기</td><td>planner</td><td>오래된 노드를 접는 백그라운드 압축. 계획자가 깨어날 때 한 번 호출한다</td></tr>
+        <tr><td>비스트리밍 선택, 최대 토큰</td><td>전 역할</td><td>LLM 프로파일의 호출 방식과 출력 상한(<a data-ch="llm"></a>장)</td></tr>
+        <tr><td>제약 주입 여부</td><td>planner, worker</td><td>작업 제약(허용/금지)을 지침에 포함할지 결정</td></tr>
+        <tr><td>실행 시간 제한</td><td>worker</td><td>의도 하나의 벽시계 예산. 작업 전체 마감과 겹치면 더 짧은 쪽으로 조인다</td></tr>
+        <tr><td>중단·지시 콜백</td><td>planner, main</td><td>실행 중인 의도를 멈추거나 지시를 보내는 경로. 콜백이 없으면 도구도 없다</td></tr>
+        <tr><td>프록시와 웹 도구 옵션</td><td>전 역할</td><td>대상 요청을 기록 프록시로 경유시킬지, 외부 검색을 허용할지(<a data-ch="evidence"></a>장)</td></tr>
+      </tbody>
+    </table></div>
+    <p>동시에 도는 실행자 수의 기본값은 3이고 시스템 설정에서 바꿉니다. "중단·지시 콜백이 없으면 도구도 없다"는 규칙은 기능 존재 여부를 와이어링 단계에서 결정한다는 뜻이며, 테스트 환경에서 부작용 있는 도구가 실수로 노출되지 않게 하는 안전 장치이기도 합니다.</p>
+  </section>
+
+  <section class="keypoints" id="summary">
+    <h2>핵심 정리</h2>
+    <ol>
+      <li>목표 분해, 계획, 실행, 사람 인터페이스의 네 역할이 저장소를 통해서만 간접적으로 만난다.</li>
+      <li>planner 는 읽고 방향을 정하고, worker 는 한 의도를 수행해 기록한다. 서로의 도구를 갖지 않는다.</li>
+      <li>범위와 제약을 바꾸는 권한은 가장 좁게, 전체 작업 종료 선언 도구는 기본 비활성으로 둔다.</li>
+      <li>역할 권한은 피해 범위를 줄이는 첫 번째 층이고, 보안 경계는 도구 호출 게이트가 맡는다.</li>
+      <li>설정은 함수로 주입되어 재시작 없이 다음 실행부터 반영된다.</li>
+    </ol>
+  </section>
+
+  <section class="quiz-sec" id="quiz">
+    <h2>확인 퀴즈</h2>
+    <div class="quiz">
+      <div class="quiz-q"><p>planner 에게 사실 기록 도구를 주지 않은 설계의 의도로 가장 알맞은 것은?</p><div class="opts">
+        <button class="opt">토큰을 아끼기 위해</button>
+        <button class="opt" data-correct>결과를 만드는 주체(실행자)와 방향을 정하는 주체(계획자)를 분리해 서로의 기록을 오염시키지 않게 하려고</button>
+        <button class="opt">planner 모델이 도구 호출을 지원하지 않아서</button>
+        <button class="opt">사람이 사실을 직접 입력해야 해서</button>
+      </div><div class="quiz-exp">계획자는 읽기와 흐름 제어, 실행자는 읽기와 기록으로 나뉩니다. 한쪽이 양쪽을 다 갖는 만능 에이전트가 되지 않게 합니다.</div></div>
+      <div class="quiz-q"><p>목표 달성 일괄 선언 도구(<code>goal_met</code>)가 기본으로 어느 역할에도 연결되지 않은 이유는?</p><div class="opts">
+        <button class="opt">구현이 아직 끝나지 않아서</button>
+        <button class="opt" data-correct>개별 목표를 증명해 가는 경로와 겹치고, 한 번의 오판으로 작업 전체가 끝나 버리는 위험이 커서</button>
+        <button class="opt">DB 가 이 상태를 저장하지 못해서</button>
+        <button class="opt">worker 만 쓸 수 있어서</button>
+      </div><div class="quiz-exp">목록에는 있어 운영자가 필요하면 명시적으로 연결할 수 있습니다. 위험한 도구를 없애는 대신 기본값을 닫아 두는 설계입니다.</div></div>
+      <div class="quiz-q"><p>역할별 도구 권한 분리를 보안 경계로 보면 안 되는 이유는?</p><div class="opts">
+        <button class="opt">도구 권한은 UI 에서만 적용되기 때문</button>
+        <button class="opt" data-correct>실행자가 공통 기본 도구(셸 등)를 가지므로 실제 부작용은 호출 게이트와 사람 승인이 통제해야 하기 때문</button>
+        <button class="opt">모든 역할이 같은 도구를 쓰기 때문</button>
+        <button class="opt">권한 분리가 코드에 구현되어 있지 않아서</button>
+      </div><div class="quiz-exp">역할 권한은 실수의 피해 범위를 줄이는 첫 번째 층입니다. 두 번째 층이 <a data-ch="safety"></a>장의 게이트입니다.</div></div>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  /* ---------------------------------------------- 시뮬레이터 1: 의도 하나의 여정 */
+  const LANES = ["사람 · main", "goals", "planner", "worker", "저장소 (DB)"];
+  const STEPS = [
+    { a: 0, b: 1, t: "작업 설명 입력", d: "사람이 작업을 만들면서 서술을 입력한다. 목표 분해기가 한 번 돈다." },
+    { a: 1, b: 4, t: "목표·제약 기록", d: "서술에서 최종 목표와 조작 제약(허용/금지)을 뽑아 저장한다. 이후 에이전트는 이 경계 안에서 일한다." },
+    { a: 4, b: 2, t: "그래프 변경 → 깨움", d: "저장소의 그래프가 바뀌면 이벤트가 쌓이고 짧은 디바운스 뒤 planner 가 깨어난다." },
+    { a: 2, b: 4, t: "현황 읽기", d: "planner 는 새 세션으로 시작해 그래프 개요를 읽는다. 이전 세션의 기억이 아니라 저장소가 현황의 원천이다." },
+    { a: 2, b: 4, t: "의도 추가", d: "아직 다루지 않은 새 방향이 있을 때만 의도를 추가한다. 대부분의 깨움은 0개 추가로 끝난다." },
+    { a: 3, b: 4, t: "의도 선점 (claim)", d: "대기 중인 의도를 worker 가 원자적으로 선점한다. 같은 의도를 두 worker 가 잡을 수 없다." },
+    { a: 3, b: 4, t: "대상 정보 읽기", d: "의도에 걸린 자산의 원본 정보를 앵커로 읽어 시작 정보로 삼는다." },
+    { a: 3, b: 4, t: "결과 기록 후 종료", d: "사실, 자산, 취약점을 기록하고 멈춘다. 한 worker 는 한 의도만 맡는다." },
+    { a: 4, b: 2, t: "되먹임: 다시 깨움", d: "worker 의 기록이 그래프를 바꾸고, 그 변경이 다시 planner 를 깨운다. 폐곡선이 닫힌다." },
+    { a: 2, b: 4, t: "목표 판정", d: "목표가 실제로 입증되었을 때만 목표를 달성으로 표시한다. 모두 달성되면 작업이 종료된다." },
+    { a: 0, b: 3, t: "사람의 실시간 지시", d: "사람은 main 을 통해 실행 중인 의도에 지시를 보낼 수 있다. 진행 중인 작업을 끊지 않는다." },
+  ];
+  let cur = 0;
+  const cvf = MB.canvas("#cv-flow", (ctx, w, h) => {
+    const P = MB.palette();
+    const left = 54, right = 54, n = LANES.length, gap = (w - left - right) / (n - 1);
+    const X = (i) => left + gap * i, top = 46, rowH = (h - top - 14) / STEPS.length;
+    ctx.font = "600 12px " + getComputedStyle(document.body).getPropertyValue("--font");
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    LANES.forEach((l, i) => {
+      ctx.fillStyle = i === 4 ? P.accent2 : P.accent; ctx.globalAlpha = 0.14; MB.rr(ctx, X(i) - 44, 8, 88, 26, 8); ctx.fill(); ctx.globalAlpha = 1;
+      ctx.fillStyle = P.text; ctx.fillText(l, X(i), 21);
+      ctx.strokeStyle = P.border; ctx.setLineDash([4, 5]); ctx.beginPath(); ctx.moveTo(X(i), 38); ctx.lineTo(X(i), h - 8); ctx.stroke(); ctx.setLineDash([]);
+    });
+    STEPS.forEach((s, i) => {
+      const y = top + rowH * (i + 0.5);
+      const on = i === cur, done = i <= cur;
+      ctx.globalAlpha = done ? 1 : 0.16;
+      ctx.strokeStyle = on ? P.accent : P.dim; ctx.fillStyle = on ? P.accent : P.dim; ctx.lineWidth = on ? 2.4 : 1.4;
+      MB.arrow(ctx, X(s.a), y, X(s.b) + (s.b > s.a ? -4 : 4), y, on ? 9 : 7);
+      ctx.fillStyle = on ? P.accent : P.dim; ctx.font = (on ? "700 " : "500 ") + "12px " + getComputedStyle(document.body).getPropertyValue("--font");
+      const mx = (X(s.a) + X(s.b)) / 2;
+      ctx.textAlign = "center"; ctx.textBaseline = "bottom"; ctx.fillText((i + 1) + ". " + s.t, mx, y - 4);
+      ctx.globalAlpha = 1; ctx.lineWidth = 1;
+    });
+    ctx.textBaseline = "middle";
+  }, { height: 470, minWidth: 600 });
+  function showStep() {
+    const s = STEPS[cur];
+    MB.stat("f-step", (cur + 1) + " / " + STEPS.length);
+    MB.stat("f-actor", MB.esc(LANES[s.a])); MB.stat("f-target", MB.esc(LANES[s.b]));
+    document.getElementById("f-note").innerHTML = "<b>" + MB.esc(s.t) + "</b><br>" + MB.esc(s.d);
+    cvf.redraw();
+  }
+  document.getElementById("f-next").addEventListener("click", () => { cur = Math.min(STEPS.length - 1, cur + 1); showStep(); });
+  document.getElementById("f-prev").addEventListener("click", () => { cur = Math.max(0, cur - 1); showStep(); });
+  document.getElementById("f-reset").addEventListener("click", () => { cur = 0; showStep(); });
+  showStep();
+
+  /* ---------------------------------------------- 시뮬레이터 2: 권한 행렬 */
+  // 값: 1 기본 부여, 0 없음, 2 도구는 있으나 기본 미연결
+  const T = [
+    { n: "graph_overview",       c: "R", g: 0, p: 1, w: 0, m: 1, d: "그래프의 현황(활성 의도, 최근 결과, 미해결 방향)을 요약해 읽는다.", y: "실행자는 시작 시 개요를 입력으로 받을 뿐 도구로 다시 조회하지 않는다. 필요한 만큼만 알게 한다." },
+    { n: "list_findings",        c: "R", g: 0, p: 1, w: 1, m: 1, d: "이 작업에서 이미 확인된 취약점을 조회한다.", y: "실행자도 중복 등록을 막으려고 조회한다." },
+    { n: "list_facts",           c: "R", g: 0, p: 1, w: 0, m: 1, d: "축적된 사실 목록을 조회한다.", y: "넓은 맥락을 읽는 일은 계획자와 사람의 몫이다. 실행자는 자기 의도에 집중한다." },
+    { n: "node_detail",          c: "R", g: 0, p: 1, w: 1, m: 1, d: "노드 하나의 전체 내용을 조회한다.", y: "" },
+    { n: "expand_digest",        c: "R", g: 0, p: 1, w: 0, m: 1, d: "접힌 요약 노드의 구성원을 되살려 읽는다(5장).", y: "압축된 과거를 복원하는 일은 계획 쪽 역할이다." },
+    { n: "get_worker_output",    c: "R", g: 0, p: 1, w: 0, m: 1, d: "특정 실행자의 최종 산출을 읽는다.", y: "" },
+    { n: "get_worker_trace",     c: "R", g: 0, p: 1, w: 1, m: 1, d: "실행 과정 기록을 단계 단위로 읽는다.", y: "실행자도 다른 실행자의 관찰을 재사용하려고 쓴다(5장)." },
+    { n: "search_worker_traces", c: "R", g: 0, p: 1, w: 1, m: 1, d: "모든 실행 과정을 키워드로 검색한다.", y: "" },
+    { n: "list_goals",           c: "R", g: 0, p: 1, w: 0, m: 0, d: "작업의 목표 목록을 조회한다.", y: "" },
+    { n: "list_assets",          c: "R", g: 0, p: 1, w: 1, m: 1, d: "자산 저장소를 조건으로 검색한다.", y: "" },
+    { n: "list_companies",       c: "R", g: 0, p: 1, w: 0, m: 0, d: "회사 목록과 범위, 자산 수를 조회한다.", y: "소속과 범위를 이해하는 일은 계획 쪽 역할이다." },
+    { n: "list_untested_assets", c: "R", g: 0, p: 1, w: 0, m: 1, d: "범위 안에서 아직 결과가 없는 자산을 조회한다(2장).", y: "" },
+    { n: "record_fact",          c: "W", g: 0, p: 0, w: 1, m: 1, d: "실행 결과와 결론을 사실로 기록한다.", y: "결과를 만드는 것은 실행자다. 계획자는 사실을 쓰지 않는다." },
+    { n: "insert_assets",        c: "W", g: 0, p: 0, w: 1, m: 1, d: "새로 알게 된 자산을 원본 속성으로 등록한다.", y: "키와 관계는 프로그램이 계산한다(2장)." },
+    { n: "report_finding",       c: "W", g: 0, p: 1, w: 1, m: 1, d: "확인된 취약점을 등록한다.", y: "계획자도 자기 판단으로 확인한 경우를 위해 갖는다." },
+    { n: "add_intent",           c: "C", g: 0, p: 1, w: 0, m: 1, d: "새 탐색 방향(의도)을 추가한다.", y: "자율 흐름의 의도는 계획자만 만든다. 사람은 main 으로 직접 넣는다." },
+    { n: "prove_goal",           c: "C", g: 0, p: 1, w: 0, m: 0, d: "목표 하나가 입증되었음을 표시한다.", y: "달성 판정은 계획자만 한다." },
+    { n: "goal_met",             c: "C", g: 0, p: 2, w: 0, m: 0, d: "작업 전체의 목표 달성을 한 번에 선언한다.", y: "기본 미연결. 오판 비용이 커서 운영자가 필요할 때만 연결한다." },
+    { n: "kill_work",            c: "C", g: 0, p: 1, w: 0, m: 0, d: "실행 중인 의도를 중단한다.", y: "감독 권한. 실행자가 자기 자신이나 동료를 멈출 수 없다." },
+    { n: "steer_work",           c: "C", g: 0, p: 1, w: 0, m: 1, d: "실행 중인 의도에 지시를 주입한다. 진행을 끊지 않는다.", y: "" },
+    { n: "add_hint",             c: "C", g: 0, p: 0, w: 0, m: 1, d: "사람이 힌트를 남긴다.", y: "사람 인터페이스 전용." },
+    { n: "set_goals",            c: "S", g: 1, p: 0, w: 0, m: 1, d: "작업의 최종 목표를 설정·추가한다.", y: "경계를 정하는 권한이라 가장 좁다." },
+    { n: "set_constraints",      c: "S", g: 1, p: 0, w: 0, m: 1, d: "조작 제약(허용/금지)을 설정한다.", y: "경계를 정하는 권한이라 가장 좁다." },
+    { n: "add_task_scope",       c: "S", g: 0, p: 1, w: 0, m: 1, d: "작업의 테스트 범위를 추가한다(2장).", y: "실행자가 스스로 범위를 넓힐 수 없다." },
+    { n: "add_company_scope",    c: "S", g: 0, p: 1, w: 0, m: 1, d: "회사의 자산 범위를 추가한다.", y: "" },
+  ];
+  const CLS = { R: ["읽기", ""], W: ["기록", "w"], C: ["흐름 제어", "c"], S: ["범위 설정", "s"] };
+  const ROLE = { goals: "g", planner: "p", worker: "w", main: "m" };
+  let role = "planner", pick = null;
+  const tb = document.querySelector("#perm-table tbody");
+  tb.innerHTML = T.map((t, i) => `<tr data-i="${i}"><td><code>${t.n}</code></td><td class="c">${t.c}</td>` +
+    ["g", "p", "w", "m"].map((k) => `<td class="c" data-k="${k}"><span class="${t[k] === 1 ? "yes" : t[k] === 2 ? "opt" : "no"}">${t[k] === 1 ? "✓" : t[k] === 2 ? "○" : "–"}</span></td>`).join("") + "</tr>").join("");
+  function renderPerm() {
+    const k = ROLE[role];
+    tb.querySelectorAll("td.col").forEach((c) => c.classList.remove("col"));
+    tb.querySelectorAll(`td[data-k=${k}]`).forEach((c) => c.classList.add("col"));
+    tb.querySelectorAll("tr").forEach((r) => r.classList.toggle("sel", pick !== null && +r.dataset.i === pick));
+    const own = T.filter((t) => t[k] === 1);
+    const cnt = { R: 0, W: 0, C: 0, S: 0 }; own.forEach((t) => cnt[t.c]++);
+    const max = Math.max(...Object.values(cnt), 1);
+    document.getElementById("cls-bars").innerHTML = Object.keys(CLS).map((c) =>
+      `<div class="cls-row ${CLS[c][1]}"><span>${CLS[c][0]}</span><div class="bar"><i style="width:${100 * cnt[c] / max}%"></i></div><b>${cnt[c]}</b></div>`).join("");
+    MB.stat("p-r", role); MB.stat("p-n", String(own.length));
+    MB.stat("p-cs", own.length ? Math.round(100 * (cnt.C + cnt.S) / own.length) + "%" : "—");
+  }
+  tb.addEventListener("click", (e) => {
+    const tr = e.target.closest("tr"); if (!tr) return;
+    pick = +tr.dataset.i; const t = T[pick];
+    const who = [["goals", "g"], ["planner", "p"], ["worker", "w"], ["main", "m"]].filter(([, k]) => t[k] === 1).map(([n]) => n);
+    document.getElementById("p-note").innerHTML = "<b>" + MB.esc(t.n) + "</b> (" + CLS[t.c][0] + ")<br>" + MB.esc(t.d) +
+      "<br>보유 역할: " + (who.length ? who.join(", ") : "없음 (기본 미연결)") + (t.y ? "<br>" + MB.esc(t.y) : "");
+    renderPerm();
+  });
+  MB.seg("p-role", (v) => { role = v; renderPerm(); });
+  renderPerm();
+})();
+</script>
+</body>
+</html>
