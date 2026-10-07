@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>전체 구조 한눈에 · ATREX-BOOK</title>
+<meta name="description" content="ARTEX 가 풀려는 문제, Go 패키지 지도, 코드 규모, 기술 스택, 그리고 이 책을 읽는 순서.">
+<link rel="canonical" href="https://busy6ee.github.io/ATREX-BOOK/chapters/overview.html">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<meta name="theme-color" content="#2f5bd6">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="ATREX-BOOK">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:title" content="전체 구조 한눈에 · ATREX-BOOK">
+<meta property="og:description" content="ARTEX 가 풀려는 문제, Go 패키지 지도, 코드 규모, 기술 스택, 그리고 이 책을 읽는 순서.">
+<meta property="og:url" content="https://busy6ee.github.io/ATREX-BOOK/chapters/overview.html">
+<meta property="og:image" content="https://busy6ee.github.io/ATREX-BOOK/og.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/common.js"></script>
+</head>
+<body data-chapter="overview">
+<main class="chapter">
+  <header class="chapter-hero">
+    <div class="eyebrow">Chapter 01</div>
+    <h1>전체 구조 한눈에</h1>
+    <p class="lead">ARTEX 는 LLM 이 조종하는 여러 에이전트가 스스로 목표를 쪼개고, 도구를 실행하고, 결과를 그래프에 쌓으며 장시간 작업을 이끄는 시스템입니다. 이 장은 그 시스템을 코드 규모와 패키지 지도로 먼저 조망하고, 이후 장에서 어디를 어떤 순서로 파고들지 정합니다.</p>
+    <ul class="objectives">
+      <li>ARTEX 가 풀려는 세 가지 구조적 문제를 설명한다</li>
+      <li>Go 백엔드의 패키지를 역할 단위로 분류하고 코드 규모를 비교한다</li>
+      <li>요청 하나가 프런트엔드에서 DB 와 에이전트까지 흐르는 계층을 그릴 수 있다</li>
+    </ul>
+  </header>
+
+  <section id="scope">
+    <h2>이 책의 범위</h2>
+    <div class="callout warn">
+      <strong>해설서의 선</strong>
+      <p>ARTEX 는 허가받은 환경에서 침투 테스트를 자동화하는 도구입니다. 이 책은 그 도구를 <b>자율 에이전트 시스템의 설계 사례</b>로 읽습니다. 다루는 것은 아키텍처, 에이전트 구성, 상태 관리, 안전장치, 방어 관점입니다. 에이전트의 프롬프트 원문, 공격 절차, 페이로드는 싣지 않습니다. 허가 없는 대상에 대한 사용은 불법이며, 저장소 자체도 방어와 학습 목적으로 공개되어 있습니다.</p>
+    </div>
+    <table>
+      <thead><tr><th>항목</th><th>내용</th></tr></thead>
+      <tbody>
+        <tr><td>분석 대상</td><td><a href="https://github.com/jiwoochris/artex-ko" target="_blank" rel="noopener">jiwoochris/artex-ko</a> (커밋 <code>2271af6</code>, 2026-10 기준)</td></tr>
+        <tr><td>상류 프로젝트</td><td>Autumn-27/ARTEX (AGPL-3.0). 한국어판은 사용자 노출 산출물만 한국어로 강제한 현지화 판본</td></tr>
+        <tr><td>분석 방법</td><td>소스 정독. 패키지 구조, 타입, 함수 흐름, DB 스키마, 주석을 근거로 서술</td></tr>
+        <tr><td>제외</td><td>프롬프트 본문 인용, 공격 기법, 취약점 악용 절차, 우회 방법</td></tr>
+      </tbody>
+    </table>
+    <p>수치(줄 수, 기본값)는 위 커밋에서 직접 센 값이고, 시뮬레이터는 설계 원리를 보이기 위한 <b>단순화 모델</b>입니다. 실제 시스템의 성능 예측이 아닙니다.</p>
+  </section>
+
+  <section id="problem">
+    <h2>ARTEX 가 풀려는 세 가지 구조적 문제</h2>
+    <p>장시간 자율 작업에는 "모델 한 번 호출"로는 풀리지 않는 문제가 있습니다. ARTEX 의 설계는 이 셋에 대한 답으로 읽으면 가장 잘 이해됩니다.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>문제</th><th>왜 어려운가</th><th>ARTEX 의 답</th><th>다루는 장</th></tr></thead>
+      <tbody>
+        <tr><td><b>연속성</b></td><td>planner 는 이벤트마다 깨어나지만 매번 새 세션이다. 이전 판단이 사라진다</td><td>이중 그래프와 공유 todolist 가 기억을 맡는다. 세션이 아니라 저장소가 상태를 쥔다</td><td><a href="graphs.html">02</a> <a href="planning.html">05</a></td></tr>
+        <tr><td><b>병렬성</b></td><td>worker 여러 명이 같은 방향을 중복하거나 서로 모르는 채 달린다</td><td>의도(intent)를 원자적으로 선점(claim)한다. 과정 단위 검색으로 남의 관찰을 재사용한다</td><td><a href="engine.html">04</a> <a href="planning.html">05</a></td></tr>
+        <tr><td><b>통제</b></td><td>도구는 실제 시스템에 부작용을 낸다. 모델의 판단만 믿을 수 없다</td><td>모든 도구 호출이 PreToolUse 훅을 지난다. 규칙, LLM 판정, 사람 승인의 3단 게이트</td><td><a href="safety.html">08</a></td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="map">
+    <h2>패키지 지도와 코드 규모</h2>
+    <p>Go 백엔드는 약 6.4만 줄(테스트 제외)이며 서버와 DB 계층이 약 71%를 차지합니다. 에이전트 로직은 7천 줄대로 의외로 작습니다. 복잡도의 대부분은 "에이전트를 똑똑하게 만드는 코드"가 아니라 "에이전트를 오래, 안전하게, 관측 가능하게 돌리는 코드"에 있습니다.</p>
+
+    <div class="sim" id="sim-pkgmap">
+      <div class="sim-head"><span class="sim-tag">SIMULATOR</span><h3>패키지 지도 탐색기</h3></div>
+      <div class="sim-body side">
+        <div class="sim-view pad">
+          <canvas id="cv-pkg"></canvas>
+        </div>
+        <div class="sim-controls">
+          <div class="ctrl"><span>그룹</span><div class="seg" id="pkg-group"><button data-value="all" class="on">전체</button><button data-value="brain">에이전트</button><button data-value="host">호스트</button><button data-value="safety">안전·증거</button><button data-value="ops">운영</button></div></div>
+          <div class="ctrl"><span>정렬</span><div class="seg" id="pkg-sort"><button data-value="lines" class="on">줄 수</button><button data-value="name">이름</button></div></div>
+          <div id="pkg-detail" style="font-size:14px;color:var(--text-dim);line-height:1.6">막대를 눌러 패키지의 역할을 확인하세요.</div>
+        </div>
+      </div>
+      <div class="sim-readout">
+        <div class="stat"><span class="k">선택 패키지</span><span class="v" id="o-pkg">—</span></div>
+        <div class="stat"><span class="k">줄 수 (테스트 제외)</span><span class="v" id="o-lines">—</span></div>
+        <div class="stat"><span class="k">전체 대비</span><span class="v" id="o-share">—</span></div>
+      </div>
+      <div class="sim-note">해볼 것: 그룹을 "에이전트"로 좁혀 agent 와 server 를 비교하세요. 에이전트의 두뇌 코드보다 서버가 3.4배 큽니다.</div>
+    </div>
+
+    <figure class="diagram wide">
+      <svg viewBox="0 0 960 420" role="img" aria-label="ARTEX 계층 구조">
+        <defs><marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker></defs>
+        <rect x="20" y="16" width="920" height="64" rx="12" class="f-acc-soft"/>
+        <text x="40" y="44" class="t-acc">프런트엔드 · Next.js 정적 빌드</text>
+        <text x="40" y="64" class="t-dim">대시보드 · 작업 · 자산 · 그래프 · 트래픽 · 승인 · 시스템 설정 (go:embed 로 단일 바이너리에 내장)</text>
+        <path d="M480 80 V108" class="s-acc" marker-end="url(#a1)"/>
+        <text x="492" y="98" class="t-mono">REST · SSE · JWT</text>
+
+        <rect x="20" y="112" width="920" height="92" rx="12" class="f-surface"/>
+        <text x="40" y="138" class="t-acc">server · 25.7k 줄</text>
+        <g>
+          <rect x="40" y="150" width="160" height="40" rx="8" class="f-elev"/><text x="120" y="175" text-anchor="middle" class="t">Manager (작업 수명주기)</text>
+          <rect x="212" y="150" width="140" height="40" rx="8" class="f-elev"/><text x="282" y="175" text-anchor="middle" class="t">Engine (루프)</text>
+          <rect x="364" y="150" width="140" height="40" rx="8" class="f-elev"/><text x="434" y="175" text-anchor="middle" class="t">Scheduler (트리거)</text>
+          <rect x="516" y="150" width="140" height="40" rx="8" class="f-elev"/><text x="586" y="175" text-anchor="middle" class="t">Notifier (알림)</text>
+          <rect x="668" y="150" width="130" height="40" rx="8" class="f-elev"/><text x="733" y="175" text-anchor="middle" class="t">HTTP API 핸들러</text>
+          <rect x="810" y="150" width="110" height="40" rx="8" class="f-elev"/><text x="865" y="175" text-anchor="middle" class="t">selfupdate</text>
+        </g>
+        <path d="M282 204 V232" class="s-acc" marker-end="url(#a1)"/>
+
+        <rect x="20" y="236" width="560" height="84" rx="12" class="f-acc2-soft"/>
+        <text x="40" y="262" class="t-acc2">agent · 7.5k 줄 (norma SDK 위에서 동작)</text>
+        <g>
+          <rect x="40" y="274" width="96" height="36" rx="8" class="f-elev"/><text x="88" y="297" text-anchor="middle" class="t">goals</text>
+          <rect x="146" y="274" width="96" height="36" rx="8" class="f-elev"/><text x="194" y="297" text-anchor="middle" class="t">planner</text>
+          <rect x="252" y="274" width="96" height="36" rx="8" class="f-elev"/><text x="300" y="297" text-anchor="middle" class="t">worker ×N</text>
+          <rect x="358" y="274" width="104" height="36" rx="8" class="f-elev"/><text x="410" y="297" text-anchor="middle" class="t">mainagent</text>
+          <rect x="472" y="274" width="92" height="36" rx="8" class="f-elev"/><text x="518" y="297" text-anchor="middle" class="t">chat 계열</text>
+        </g>
+
+        <rect x="600" y="236" width="340" height="84" rx="12" class="f-ok-soft"/>
+        <text x="620" y="262" class="t-dim" style="font-weight:700">지원 서브시스템</text>
+        <text x="620" y="284" class="t-dim">guard · intercept (승인 게이트)</text>
+        <text x="620" y="304" class="t-dim">traffic · evidence · enrich · llmpool</text>
+        <path d="M300 320 V348" class="s-acc" marker-end="url(#a1)"/>
+        <path d="M770 320 V348" class="s-acc" marker-end="url(#a1)"/>
+
+        <rect x="20" y="352" width="920" height="52" rx="12" class="f-surface"/>
+        <text x="40" y="376" class="t-acc">db · 19.5k 줄 · PostgreSQL (pgx) · schema.sql 49개 테이블 (기동마다 멱등 적용)</text>
+        <text x="40" y="394" class="t-dim">자산 그래프 · 탐색 그래프 · 활동 로그 · 설정 · LLM 프로파일 · 승인 대기 · 알림</text>
+      </svg>
+      <figcaption><b>그림 1-1.</b> ARTEX 의 계층. 에이전트(주황)는 도구를 통해서만 DB 에 닿고, 모든 도구 호출은 지원 서브시스템(녹색)의 게이트를 지난다.</figcaption>
+    </figure>
+  </section>
+
+  <section id="stack">
+    <h2>기술 스택</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>층</th><th>선택</th><th>설계상 의미</th></tr></thead>
+      <tbody>
+        <tr><td>언어·배포</td><td>Go 1.26, 단일 바이너리</td><td>프런트엔드를 <code>go:embed</code> 로 내장해 배포 단위를 하나로 줄인다. 실행은 감시 스크립트가 맡는다</td></tr>
+        <tr><td>에이전트 하네스</td><td>norma SDK v0.4.3 (외부)</td><td>세션, 도구 호출 루프, 압축, 수습(settlement), 훅을 SDK 가 제공한다. ARTEX 는 도메인 도구와 오케스트레이션만 얹는다</td></tr>
+        <tr><td>주 저장소</td><td>PostgreSQL (pgx)</td><td>두 그래프, 활동, 설정, 승인 대기 전부 한 DB. 스키마는 <code>go:embed</code> 되어 매 기동마다 멱등 적용</td></tr>
+        <tr><td>보조 저장소</td><td>SQLite (modernc)</td><td>트래픽 기록의 페이지 조회용 색인 전용. 코드 주석에는 SQLite 가 주 저장소라고 남아 있으나 현재 구현은 PostgreSQL 이다</td></tr>
+        <tr><td>네트워크 기록</td><td>go-mitmproxy</td><td>대상 HTTP 교환을 전부 기록하는 MITM 프록시와 자체 CA</td></tr>
+        <tr><td>자산 보강</td><td>dnsx, 자체 HTTP 프로버</td><td>에이전트와 무관한 비-AI 비동기 워커 풀</td></tr>
+        <tr><td>인증·실시간</td><td>JWT, SSE</td><td>활동 스트림은 동일 출처 SSE. 리버스 프록시 버퍼링을 꺼야 한다</td></tr>
+        <tr><td>프런트엔드</td><td>Next.js, shadcn/ui, i18n(ko/zh)</td><td>메시지 카탈로그로 한국어 UI 를 제공한다</td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout deep">
+      <strong>주석과 구현의 불일치 읽기</strong>
+      <p><code>cmd/artex/main.go</code> 의 패키지 주석은 아직 "dual SQLite graph stores"라고 적혀 있습니다. 상류에서 SQLite 로 시작해 PostgreSQL 로 옮겨 간 흔적입니다. 코드 읽기에서는 주석보다 <code>go.mod</code> 의 의존성과 <code>db/schema.sql</code> 이 신뢰할 근거입니다. 이 책의 서술은 후자에 맞춥니다.</p>
+    </div>
+  </section>
+
+  <section id="boot">
+    <h2>기동 순서</h2>
+    <p><code>main.go</code> 의 <code>run()</code> 은 160줄이 채 안 되지만, 순서에 이유가 있습니다.</p>
+    <ol>
+      <li><b>로그 캡처 시작</b>: 기동 로그까지 메모리 싱크에 담아 /logs 화면에서 보이게 한다.</li>
+      <li><b>자가 업데이트 부트스트랩</b>: 새 바이너리로 교체 중이거나 롤백해야 하면 저장소를 열기도 전에 종료 코드 75 로 나간다. 비싼 일을 하기 전에 끝내는 순서다.</li>
+      <li><b>종료 컨텍스트 생성</b>: 시그널 컨텍스트의 자식이 아니라 <code>WithCancelCause</code> 로 따로 만든다. 부모의 단순 <code>Canceled</code> 가 먼저 도착해 종료 원인을 잃는 경쟁을 피하려는 설계다.</li>
+      <li><b>Manager 생성</b>: 데이터 디렉터리, 프록시 주소로 저장소와 엔진을 연다.</li>
+      <li><b>정착 타이머</b>: 새 빌드가 30초 살아남으면 업그레이드 표식을 지운다. 그 전에 죽으면 시도 횟수가 쌓여 롤백된다.</li>
+      <li><b>HTTP 서버 기동</b> 후 시그널 또는 재시작 요청을 기다리고, 종료 코드를 정한다(0: 정상 정지, 75: 재기동 요청).</li>
+    </ol>
+  </section>
+
+  <section id="reading">
+    <h2>이 책을 읽는 순서</h2>
+    <div class="paths">
+      <div class="path"><h3>설계 전체 훑기</h3><p>에이전트 시스템의 뼈대만 빠르게.</p><div class="steps"><a href="graphs.html">02</a><a href="agents.html">03</a><a href="engine.html">04</a><a href="safety.html">08</a></div></div>
+      <div class="path"><h3>에이전트 설계자</h3><p>역할 분리, 프롬프트, 도구 구성.</p><div class="steps"><a href="agents.html">03</a><a href="planning.html">05</a><a href="tools.html">06</a><a href="prompt.html">07</a></div></div>
+      <div class="path"><h3>플랫폼·SRE</h3><p>복원력, 운영, 업데이트.</p><div class="steps"><a href="engine.html">04</a><a href="llm.html">10</a><a href="server.html">11</a></div></div>
+      <div class="path"><h3>보안 방어팀</h3><p>무엇을 관측하고 어디를 조일지.</p><div class="steps"><a href="safety.html">08</a><a href="evidence.html">09</a><a href="defense.html">12</a></div></div>
+    </div>
+  </section>
+
+  <section class="keypoints" id="summary">
+    <h2>핵심 정리</h2>
+    <ol>
+      <li>ARTEX 의 설계는 연속성, 병렬성, 통제라는 세 구조적 문제에 대한 답으로 읽을 수 있다.</li>
+      <li>코드의 약 71%가 server 와 db 다. 에이전트 두뇌보다 운영·관측·복원력 코드가 훨씬 크다.</li>
+      <li>상태는 세션이 아니라 PostgreSQL 이 쥔다. 에이전트 세션은 언제든 버려도 되는 일회용이다.</li>
+      <li>모든 부작용은 도구를 통해서만 일어나고, 도구는 훅 게이트를 지난다.</li>
+      <li>이 책은 방어와 학습 목적의 해설서이며 공격 절차와 프롬프트 원문은 다루지 않는다.</li>
+    </ol>
+  </section>
+
+  <section class="quiz-sec" id="quiz">
+    <h2>확인 퀴즈</h2>
+    <div class="quiz">
+      <div class="quiz-q"><p>코드 규모에서 가장 큰 비중을 차지하는 패키지 조합은?</p><div class="opts">
+        <button class="opt">agent 와 guard</button>
+        <button class="opt" data-correct>server 와 db</button>
+        <button class="opt">traffic 과 evidence</button>
+        <button class="opt">notify 와 report</button>
+      </div><div class="quiz-exp">server 25.7k, db 19.5k 줄로 전체 약 6.4만 줄의 약 71%입니다. 에이전트 로직(agent)은 약 7.5k 줄입니다.</div></div>
+      <div class="quiz-q"><p>planner 가 매번 새 세션으로 깨어나는데도 작업이 이어지는 근거로 가장 알맞은 것은?</p><div class="opts">
+        <button class="opt">모델의 컨텍스트 윈도우가 충분히 크기 때문</button>
+        <button class="opt" data-correct>상태를 세션이 아니라 DB 의 그래프와 공유 todolist 가 보관하기 때문</button>
+        <button class="opt">worker 가 planner 의 대화 기록을 직접 읽기 때문</button>
+        <button class="opt">엔진이 planner 프로세스를 종료하지 않기 때문</button>
+      </div><div class="quiz-exp">세션은 일회용이고, 연속성은 저장소(그래프, todolist)에 있습니다. 2장과 5장에서 다룹니다.</div></div>
+      <div class="quiz-q"><p>종료 컨텍스트를 시그널 컨텍스트의 자식으로 만들지 않은 이유는?</p><div class="opts">
+        <button class="opt">고루틴 수를 줄이기 위해</button>
+        <button class="opt" data-correct>부모의 단순 Canceled 가 먼저 도착해 종료 원인(AbortShutdown)이 사라지는 경쟁을 피하려고</button>
+        <button class="opt">Windows 호환 때문에</button>
+        <button class="opt">HTTP 서버를 먼저 닫기 위해</button>
+      </div><div class="quiz-exp"><code>main.go</code> 의 <code>shutdownContext</code> 주석이 이 경쟁을 명시합니다.</div></div>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  // 패키지 규모는 artex-ko 2271af6 에서 *_test.go 를 제외하고 센 값이다.
+  const PK = [
+    { n: "server", l: 25739, g: "ops", d: "HTTP API, Manager, Engine, Scheduler, 알림 연동, 자가 업데이트 API. 작업 수명주기와 오케스트레이션의 중심." },
+    { n: "db", l: 19480, g: "ops", d: "PostgreSQL 저장소. 두 그래프, 활동, 설정, 승인 대기, LLM 프로파일. schema.sql 이 go:embed 로 들어간다." },
+    { n: "agent", l: 7475, g: "brain", d: "goals · planner · worker · mainagent · chat 계열, ToolSet, 프롬프트, 압축(콜드 다이제스트), 수습 문구, provider 설정." },
+    { n: "notify", l: 2561, g: "ops", d: "알림 채널 어댑터(이메일, 웹훅, 텔레그램, 슬랙류, 중국 메신저), 필터, 마스킹, 렌더, 서명." },
+    { n: "traffic", l: 2493, g: "host", d: "go-mitmproxy 기반 기록 프록시. 교환을 파일 트리로 저장하고 SQLite 색인으로 조회한다." },
+    { n: "intercept", l: 1194, g: "safety", d: "도구 호출 규칙(allow/deny/ask), LLM 대체 판정, 사람 승인 대기와 타임아웃 정책." },
+    { n: "selfupdate", l: 952, g: "ops", d: "릴리스 내려받기, SHA256 검증, 스모크 테스트, 원자적 교체, 3회 연속 실패 시 롤백." },
+    { n: "sidequestion", l: 785, g: "brain", d: "/btw 곁질문. 실행 중인 에이전트 컨텍스트의 스냅샷으로 본 대화를 방해하지 않고 답한다." },
+    { n: "mcphttp", l: 578, g: "host", d: "HTTP/SSE 방식 MCP 클라이언트." },
+    { n: "llmrec", l: 521, g: "host", d: "LLM 요청·응답 원문 기록(감사용), 사용량 집계." },
+    { n: "llmpool", l: 483, g: "host", d: "LLM 프로파일 체인의 장애 전환과 회로 차단기." },
+    { n: "evidence", l: 419, g: "safety", d: "취약점 증거를 휘발성 트래픽과 분리해 해시 기반으로 보존한다." },
+    { n: "report", l: 301, g: "safety", d: "작업 리포트와 취약점 목록 렌더." },
+    { n: "enrich", l: 292, g: "host", d: "도메인 DNS 해석과 웹 자산 HTTP 프로빙. 에이전트와 무관한 비-AI 워커 풀." },
+    { n: "guard", l: 206, g: "safety", d: "PreToolUse/PostToolUse 훅. 감사 로그를 남기고 intercept 판정을 적용한다." },
+    { n: "config", l: 192, g: "ops", d: "config.json, 환경 변수, 경로 해석." },
+    { n: "cmd/artex", l: 160, g: "ops", d: "진입점. 부트스트랩, 종료 컨텍스트, 종료 코드 규약." },
+  ];
+  const total = PK.reduce((s, p) => s + p.l, 0);
+  let group = "all", sortBy = "lines", sel = null, hit = [];
+  const gcol = { brain: "accent2", host: "accent", safety: "ok", ops: "dim" };
+
+  const cv = MB.canvas("#cv-pkg", (ctx, w, h) => {
+    const P = MB.palette();
+    let rows = PK.filter((p) => group === "all" || p.g === group);
+    rows = rows.slice().sort((a, b) => (sortBy === "name" ? a.n.localeCompare(b.n) : b.l - a.l));
+    const rowH = 26, top = 12, left = 104, right = 64;
+    const max = Math.max(...rows.map((r) => r.l));
+    ctx.font = "13px " + getComputedStyle(document.body).getPropertyValue("--font");
+    hit = [];
+    rows.forEach((r, i) => {
+      const y = top + i * rowH, bw = Math.max(2, ((w - left - right) * r.l) / max);
+      ctx.fillStyle = P.dim; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+      ctx.fillText(r.n, left - 10, y + rowH / 2 - 2);
+      ctx.fillStyle = P[gcol[r.g]] || P.accent;
+      ctx.globalAlpha = sel === r.n ? 1 : 0.62;
+      MB.rr(ctx, left, y + 3, bw, rowH - 8, 5); ctx.fill(); ctx.globalAlpha = 1;
+      ctx.fillStyle = P.text; ctx.textAlign = "left";
+      ctx.fillText(r.l.toLocaleString("en-US"), left + bw + 8, y + rowH / 2 - 2);
+      hit.push({ y0: y, y1: y + rowH, r });
+    });
+  }, { height: () => PK.filter((p) => group === "all" || p.g === group).length * 26 + 24 });
+
+  cv.canvas.addEventListener("click", (e) => {
+    const y = e.clientY - cv.canvas.getBoundingClientRect().top;
+    const h = hit.find((x) => y >= x.y0 && y < x.y1);
+    if (!h) return;
+    sel = h.r.n;
+    MB.stat("o-pkg", h.r.n);
+    MB.stat("o-lines", h.r.l.toLocaleString("en-US"));
+    MB.stat("o-share", (100 * h.r.l / total).toFixed(1) + "%");
+    document.getElementById("pkg-detail").textContent = h.r.d;
+    cv.redraw();
+  });
+  MB.seg("pkg-group", (v) => { group = v; sel = null; cv.resize(); });
+  MB.seg("pkg-sort", (v) => { sortBy = v; cv.redraw(); });
+})();
+</script>
+</body>
+</html>
