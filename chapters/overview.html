@@ -58,9 +58,9 @@
     <div class="table-wrap"><table>
       <thead><tr><th>문제</th><th>왜 어려운가</th><th>ARTEX 의 답</th><th>다루는 장</th></tr></thead>
       <tbody>
-        <tr><td><b>연속성</b></td><td>planner 는 이벤트마다 깨어나지만 매번 새 세션이다. 이전 판단이 사라진다</td><td>이중 그래프와 공유 todolist 가 기억을 맡는다. 세션이 아니라 저장소가 상태를 쥔다</td><td><a href="graphs.html">02</a> <a href="planning.html">05</a></td></tr>
-        <tr><td><b>병렬성</b></td><td>worker 여러 명이 같은 방향을 중복하거나 서로 모르는 채 달린다</td><td>의도(intent)를 원자적으로 선점(claim)한다. 과정 단위 검색으로 남의 관찰을 재사용한다</td><td><a href="engine.html">04</a> <a href="planning.html">05</a></td></tr>
-        <tr><td><b>통제</b></td><td>도구는 실제 시스템에 부작용을 낸다. 모델의 판단만 믿을 수 없다</td><td>모든 도구 호출이 PreToolUse 훅을 지난다. 규칙, LLM 판정, 사람 승인의 3단 게이트</td><td><a href="safety.html">08</a></td></tr>
+        <tr><td><b>연속성</b></td><td>planner 는 이벤트마다 깨어나지만 매번 새 세션이다. 이전 판단이 사라진다</td><td>이중 그래프와 공유 todolist 가 기억을 맡는다. 세션이 아니라 저장소가 상태를 쥔다</td><td><a data-ch="graphs"></a> <a data-ch="planning"></a></td></tr>
+        <tr><td><b>병렬성</b></td><td>worker 여러 명이 같은 방향을 중복하거나 서로 모르는 채 달린다</td><td>의도(intent)를 원자적으로 선점(claim)한다. 과정 단위 검색으로 남의 관찰을 재사용한다</td><td><a data-ch="engine"></a> <a data-ch="planning"></a></td></tr>
+        <tr><td><b>통제</b></td><td>도구는 실제 시스템에 부작용을 낸다. 모델의 판단만 믿을 수 없다</td><td>모든 도구 호출이 PreToolUse 훅을 지난다. 규칙, LLM 판정, 사람 승인의 3단 게이트</td><td><a data-ch="safety"></a></td></tr>
       </tbody>
     </table></div>
   </section>
@@ -172,10 +172,10 @@
   <section id="reading">
     <h2>이 책을 읽는 순서</h2>
     <div class="paths">
-      <div class="path"><h3>설계 전체 훑기</h3><p>에이전트 시스템의 뼈대만 빠르게.</p><div class="steps"><a href="graphs.html">02</a><a href="agents.html">03</a><a href="engine.html">04</a><a href="safety.html">08</a></div></div>
-      <div class="path"><h3>에이전트 설계자</h3><p>역할 분리, 프롬프트, 도구 구성.</p><div class="steps"><a href="agents.html">03</a><a href="planning.html">05</a><a href="tools.html">06</a><a href="prompt.html">07</a></div></div>
-      <div class="path"><h3>플랫폼·SRE</h3><p>복원력, 운영, 업데이트.</p><div class="steps"><a href="engine.html">04</a><a href="llm.html">10</a><a href="server.html">11</a></div></div>
-      <div class="path"><h3>보안 방어팀</h3><p>무엇을 관측하고 어디를 조일지.</p><div class="steps"><a href="safety.html">08</a><a href="evidence.html">09</a><a href="defense.html">12</a></div></div>
+      <div class="path"><h3>설계 전체 훑기</h3><p>에이전트 시스템의 뼈대만 빠르게.</p><div class="steps"><a data-ch="graphs"></a><a data-ch="agents"></a><a data-ch="engine"></a><a data-ch="safety"></a></div></div>
+      <div class="path"><h3>에이전트 설계자</h3><p>역할 분리, 기억 압축, 도구 구성.</p><div class="steps"><a data-ch="agents"></a><a data-ch="planning"></a><a data-ch="tools"></a><a data-ch="safety"></a></div></div>
+      <div class="path"><h3>플랫폼·SRE</h3><p>복원력, 운영, 업데이트.</p><div class="steps"><a data-ch="engine"></a><a data-ch="llm"></a><a data-ch="server"></a></div></div>
+      <div class="path"><h3>보안 방어팀</h3><p>무엇을 관측하고 어디를 조일지.</p><div class="steps"><a data-ch="safety"></a><a data-ch="evidence"></a><a data-ch="defense"></a></div></div>
     </div>
   </section>
 

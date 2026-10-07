@@ -14,6 +14,10 @@
 <meta property="og:title" content="ATREX-BOOK · 자율 에이전트 해부서">
 <meta property="og:description" content="LLM 이 조종하는 자율 에이전트 시스템 ARTEX 의 설계를 코드 수준에서 해설하는 학습서.">
 <meta property="og:url" content="https://busy6ee.github.io/ATREX-BOOK/">
+<meta property="og:image" content="https://busy6ee.github.io/ATREX-BOOK/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="css/style.css">
 <script src="js/common.js"></script>
 <style>
@@ -66,7 +70,7 @@
 
 <section class="home-section tight" id="chapters">
   <h2>챕터</h2>
-  <p class="sub">앞 장에서 뒤 장으로 이어지도록 구성했습니다. 공개된 장만 열립니다.</p>
+  <p class="sub">앞 장에서 뒤 장으로 이어지도록 구성했습니다. 공개된 장만 열리고, 나머지는 순서대로 추가됩니다.</p>
   <div class="ch-grid" id="ch-grid"></div>
 </section>
 
@@ -78,9 +82,9 @@
 
 <script>
 (function () {
-  // 공개된 챕터 slug. 새 챕터를 올릴 때 여기에 추가하면 카드와 읽기 순서가 링크로 바뀐다.
-  const READY = ["overview"];
+  // 공개 여부는 js/common.js 의 CHAPTERS[].ready 가 단일 출처다.
   const CH = MB.CHAPTERS;
+  const READY = CH.filter((c) => c.ready).map((c) => c.slug);
   const bySlug = (s) => CH.find((c) => c.slug === s);
 
   document.getElementById("b-ready").textContent = READY.length + " / " + CH.length + "장 공개";
@@ -99,7 +103,7 @@
   // 읽는 순서
   const PATHS = [
     { t: "설계 전체 훑기", d: "에이전트 시스템의 뼈대만 빠르게.", s: ["graphs", "agents", "engine", "safety"] },
-    { t: "에이전트 설계자", d: "역할 분리, 프롬프트, 도구 구성.", s: ["agents", "planning", "tools", "prompt"] },
+    { t: "에이전트 설계자", d: "역할 분리, 기억 압축, 도구 구성.", s: ["agents", "planning", "tools", "safety"] },
     { t: "플랫폼 · SRE", d: "복원력, 운영, 업데이트.", s: ["engine", "llm", "server"] },
     { t: "보안 방어팀", d: "무엇을 관측하고 어디를 조일지.", s: ["safety", "evidence", "defense"] },
   ];

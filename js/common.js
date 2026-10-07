@@ -11,28 +11,27 @@
 (function () {
   "use strict";
 
-  const REPO = "https://github.com/Busy6ee/ATREX-BOOK";
   const SOURCE = "https://github.com/jiwoochris/artex-ko";
 
+  // 공개 여부의 단일 출처. ready:true 인 장만 서랍·이전/다음·검색·홈 카드에 링크로 나타난다.
+  // 장 파일을 올릴 때 해당 항목에 ready: true 를 추가한다.
   const CHAPTERS = [
-    { slug: "overview",  num: "01", title: "전체 구조 한눈에",        desc: "ARTEX 가 풀려는 문제, 패키지 지도, 코드 규모, 기술 스택. 이 책을 읽는 순서.", tags: ["개관", "sim"] },
-    { slug: "graphs",    num: "02", title: "이중 그래프",             desc: "탐색 그래프와 자산 그래프, 그리고 둘을 잇는 앵커. 노드·간선·상태의 설계.", tags: ["데이터", "sim"] },
-    { slug: "agents",    num: "03", title: "에이전트 역할 구성",       desc: "goals · planner · worker · mainagent · 대화형 에이전트. 역할별 도구 권한과 책임 경계.", tags: ["에이전트", "sim"] },
+    { slug: "overview",  num: "01", title: "전체 구조 한눈에",        desc: "ARTEX 가 풀려는 문제, 패키지 지도, 코드 규모, 기술 스택. 이 책을 읽는 순서.", tags: ["개관", "sim"], ready: true },
+    { slug: "graphs",    num: "02", title: "이중 그래프",             desc: "탐색 그래프와 자산 그래프, 그리고 둘을 잇는 앵커. 노드·간선·상태의 설계와 커버리지 정의.", tags: ["데이터", "sim"] },
+    { slug: "agents",    num: "03", title: "에이전트 역할 구성",       desc: "목표 분해 · 계획 · 실행 · 사람 인터페이스. 역할별 도구 권한과 책임 경계.", tags: ["에이전트", "sim"] },
     { slug: "engine",    num: "04", title: "엔진과 의도 생명주기",     desc: "이벤트 구동 폐곡선, 디바운스와 하트비트, 의도 상태 전이, 재시도와 수습 단계.", tags: ["엔진", "sim"] },
-    { slug: "planning",  num: "05", title: "계획 연속성과 기억 압축",  desc: "무상태 세션 위의 공유 todolist, worker 간 과정 교환, 콜드 다이제스트 압축.", tags: ["메모리", "sim"] },
-    { slug: "tools",     num: "06", title: "도구 · 스킬 · MCP 계층",   desc: "ToolSet, 역할별 도구 세트, DB 오버라이드, 지연 로딩 MCP, 패닉 격리.", tags: ["도구", "sim"] },
-    { slug: "prompt",    num: "07", title: "프롬프트 계층과 한국어화", desc: "편집 가능한 본문과 코드 고정 꼬리의 분리, 템플릿 변수, 현지화 경계.", tags: ["프롬프트", "sim"] },
-    { slug: "safety",    num: "08", title: "안전 게이트와 사람 승인",  desc: "guard 훅, 규칙 우선순위, LLM 판정, 사람 승인과 타임아웃 정책, 감사 기록.", tags: ["안전", "sim"] },
-    { slug: "evidence",  num: "09", title: "트래픽 기록과 증거",       desc: "기록 프록시, 증거 저장소, 취약점-트래픽 바인딩, 낙관적 버전 잠금, 리포트.", tags: ["증거", "sim"] },
-    { slug: "llm",       num: "10", title: "LLM 풀과 복원력",          desc: "프로파일 체인, 장애 전환 규칙, 회로 차단기, 쿼터 감지, 종료 사유와 수습.", tags: ["복원력", "sim"] },
-    { slug: "server",    num: "11", title: "서버 · 데이터 · 운영",     desc: "Manager, 작업 수명주기, 스케줄러, 알림, 자가 업데이트, 49개 테이블 지도.", tags: ["운영", "sim"] },
-    { slug: "defense",   num: "12", title: "방어 · 탐지 관점",         desc: "방어자가 관측할 수 있는 지문, Sigma · Suricata 규칙 구성, 하드닝 체크리스트.", tags: ["방어", "sim"] },
-    { slug: "glossary",  num: "13", title: "용어집 & 종합 퀴즈",       desc: "핵심 용어 검색과 15문항 종합 퀴즈.", tags: ["정리"] },
+    { slug: "planning",  num: "05", title: "계획 연속성과 기억 압축",  desc: "무상태 세션 위의 공유 할 일 목록, 실행 과정 교환, 콜드 다이제스트 압축.", tags: ["메모리", "sim"] },
+    { slug: "tools",     num: "06", title: "도구 · 스킬 · MCP 계층",   desc: "역할별 도구 세트, DB 오버라이드, 지연 로딩 MCP, 패닉 격리.", tags: ["도구", "sim"] },
+    { slug: "safety",    num: "07", title: "안전 게이트와 사람 승인",  desc: "훅, 규칙 우선순위, LLM 판정, 사람 승인과 타임아웃 정책, 감사 기록.", tags: ["안전", "sim"] },
+    { slug: "evidence",  num: "08", title: "감사 가능성: 기록과 증거", desc: "트래픽 기록, 증거 저장소, 취약점-트래픽 바인딩, 낙관적 버전 잠금.", tags: ["증거", "sim"] },
+    { slug: "llm",       num: "09", title: "LLM 풀과 복원력",          desc: "프로파일 체인, 장애 전환 규칙, 회로 차단기, 쿼터 감지, 종료 사유와 수습.", tags: ["복원력", "sim"] },
+    { slug: "server",    num: "10", title: "서버 · 데이터 · 운영",     desc: "작업 수명주기, 스케줄러, 알림 채널, 자가 업데이트와 롤백, 49개 테이블 지도.", tags: ["운영", "sim"] },
+    { slug: "defense",   num: "11", title: "방어 · 탐지 관점",         desc: "방어자가 관측할 수 있는 지문, Sigma · Suricata 규칙 구성, 하드닝 체크리스트.", tags: ["방어", "sim"] },
+    { slug: "glossary",  num: "12", title: "용어집 & 종합 퀴즈",       desc: "핵심 용어 검색과 종합 퀴즈.", tags: ["정리"] },
   ];
 
   const MB = (window.MB = {});
   MB.CHAPTERS = CHAPTERS;
-  MB.REPO = REPO;
   MB.SOURCE = SOURCE;
 
   /* ------------------------------------------------------------ utils */
@@ -299,13 +298,23 @@
   const ICON_MENU = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>';
   const ICON_MOON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
   const ICON_SUN = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
-  const ICON_GH = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.35 1.09 2.92.83.09-.65.35-1.09.64-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02A9.6 9.6 0 0 1 12 6.8c.85 0 1.71.11 2.51.34 1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2z"/></svg>';
 
   function build() {
     const body = document.body;
     const root = body.dataset.root != null ? body.dataset.root : body.dataset.chapter ? "../" : "";
     const curSlug = body.dataset.chapter || "";
     const href = (slug) => (slug ? `${root}chapters/${slug}.html` : `${root}index.html`);
+
+    // 본문 속 장 링크: <a data-ch="slug"></a>. 공개된 장은 링크로, 아직 없는 장은 링크 없는 표시로 바꾼다.
+    document.querySelectorAll("a[data-ch]").forEach((a) => {
+      const c = CHAPTERS.find((x) => x.slug === a.dataset.ch);
+      if (!c) return;
+      if (!a.textContent.trim()) a.textContent = c.num;
+      if (c.ready) { a.setAttribute("href", href(c.slug)); return; }
+      const sp = document.createElement("span");
+      sp.className = "ch-soon"; sp.title = "준비 중"; sp.textContent = a.textContent;
+      a.replaceWith(sp);
+    });
 
     const bar = document.createElement("header");
     bar.className = "mb-topbar";
@@ -320,7 +329,6 @@
         <div class="book-search-results" aria-live="polite"></div>
       </div>
       <div class="book-nav-right">
-        <a class="mb-btn icon" href="${REPO}" target="_blank" rel="noopener" aria-label="GitHub 저장소" title="GitHub 저장소">${ICON_GH}</a>
         <button class="mb-btn icon" id="mb-theme" aria-label="테마 전환"></button>
       </div>
       <div class="mb-progress" id="mb-progress"></div>`;
@@ -334,7 +342,7 @@
     let detail = [], detailsLoaded = false, detailPromise = null;
     function loadDetails() {
       if (detailPromise) return detailPromise;
-      detailPromise = Promise.all(CHAPTERS.map(async (chapter) => {
+      detailPromise = Promise.all(CHAPTERS.filter((c) => c.ready).map(async (chapter) => {
         try {
           const r = await fetch(href(chapter.slug));
           if (!r.ok) return [];
@@ -354,7 +362,7 @@
       results.replaceChildren();
       if (!words.length) { closeSearch(); return; }
       const has = (v) => words.every((w) => v.toLocaleLowerCase().includes(w));
-      const ch = CHAPTERS.filter((c) => has([c.num, c.title, c.desc, ...(c.tags || [])].join(" "))).map((c) => ({ type: "챕터", title: c.title, chapter: c, hash: "" }));
+      const ch = CHAPTERS.filter((c) => c.ready).filter((c) => has([c.num, c.title, c.desc, ...(c.tags || [])].join(" "))).map((c) => ({ type: "챕터", title: c.title, chapter: c, hash: "" }));
       const dm = detail.filter((e) => has(e.title));
       const matches = [...ch.slice(0, 4), ...dm.filter((e) => e.type === "섹션").slice(0, 6), ...dm.filter((e) => e.type === "시뮬레이터").slice(0, 4)];
       matches.forEach((e) => {
@@ -390,7 +398,9 @@
     drawer.setAttribute("aria-label", "챕터 목록");
     drawer.innerHTML = `<h4>Chapters</h4><ul class="mb-chlist">
       <li><a href="${href("")}" class="${curSlug ? "" : "active"}"><span class="num">00</span><span>홈 · 로드맵</span></a></li>
-      ${CHAPTERS.map((c) => `<li><a href="${href(c.slug)}" class="${c.slug === curSlug ? "active" : ""}"><span class="num">${c.num}</span><span>${c.title}</span></a></li>`).join("")}
+      ${CHAPTERS.map((c) => c.ready
+        ? `<li><a href="${href(c.slug)}" class="${c.slug === curSlug ? "active" : ""}"><span class="num">${c.num}</span><span>${c.title}</span></a></li>`
+        : `<li><span class="item soon" aria-disabled="true"><span class="num">${c.num}</span><span>${c.title} <em>준비 중</em></span></span></li>`).join("")}
     </ul>`;
     const backdrop = document.createElement("div");
     backdrop.className = "mb-drawer-backdrop";
@@ -442,9 +452,10 @@
         }, { rootMargin: "-20% 0px -70% 0px" });
         h2s.forEach((h) => io.observe(h.parentElement));
       }
-      const idx = CHAPTERS.findIndex((c) => c.slug === curSlug);
-      const prev = idx > 0 ? CHAPTERS[idx - 1] : null;
-      const next = idx >= 0 && idx < CHAPTERS.length - 1 ? CHAPTERS[idx + 1] : null;
+      const pub = CHAPTERS.filter((c) => c.ready);
+      const idx = pub.findIndex((c) => c.slug === curSlug);
+      const prev = idx > 0 ? pub[idx - 1] : null;
+      const next = idx >= 0 && idx < pub.length - 1 ? pub[idx + 1] : null;
       const pager = document.createElement("nav");
       pager.className = "mb-pager";
       pager.setAttribute("aria-label", "이전·다음 챕터");
@@ -457,7 +468,7 @@
     const foot = document.createElement("footer");
     foot.className = "mb-foot";
     foot.innerHTML = `ATREX-BOOK — 오픈소스 <a href="${SOURCE}" target="_blank" rel="noopener">artex-ko</a> 의 아키텍처·에이전트 구성·동작 원리를 코드 수준에서 해설한 학습서입니다.<br>
-      방어와 학습 목적의 해설서이며, 공격 절차·프롬프트 원문·페이로드는 싣지 않습니다. 수치와 시뮬레이터는 설계를 이해하기 위한 단순화 모델입니다. · <a href="${REPO}" target="_blank" rel="noopener">저장소</a>`;
+      방어와 학습 목적의 해설서이며, 공격 절차·프롬프트 원문·페이로드는 싣지 않습니다. 수치와 시뮬레이터는 설계를 이해하기 위한 단순화 모델입니다.`;
     body.appendChild(foot);
 
     // quiz
